@@ -11,4 +11,5 @@ public class LocalData {
     public static List<Airport> airports;
     public static List<Reservation> reservations;
     public static List<Aerodrome> aerodromes;
+    public static List<Waypoint> waypoints;
 }

@@ -444,6 +444,81 @@ public class DownloadAreasHTTPClient {
         });
     }
 
+    public void getWaypoints()  {
+        System.out.println("HTTPREQUEST");
+        DownloadAreasHTTPClient.get("waypoints.geojson", null, new JsonHttpResponseHandler() {
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                // If the response is JSONObject instead of expected JSONArray
+                System.out.println("HTTPRESPONSE with JSONObject");
 
+                try {
+                    JSONArray features = response.getJSONArray("features");
+                    List<Waypoint> airspaceList = new LinkedList<Waypoint>();
+
+                    for( int i = 0; i < features.length(); i++) {
+
+                        try {
+
+                            JSONObject feature  = (JSONObject) features.get(i);
+
+                            JSONObject properties  = (JSONObject) feature.get("properties");
+
+                            Waypoint a = new Waypoint();
+                            a.setName( properties.optString("name"));
+                            a.setCompulsory( properties.optBoolean("compulsory"));
+
+
+                            JSONObject geometry  = (JSONObject) feature.get("geometry");
+                            JSONArray coords = geometry.getJSONArray("coordinates").getJSONArray(0);
+                           double lat = 0;
+                           double lng = 0;
+                            for( int ii = 0; ii < coords.length(); ii++) {
+                                JSONArray coord = (JSONArray) coords.get(ii);
+                                lat += coord.getDouble(1);
+                                lng += coord.getDouble(0);
+                            }
+
+                            a.setCenter(new LatLng( lat/coords.length(), lng/coords.length()));
+
+
+                            airspaceList.add(a);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    LocalData.waypoints = airspaceList;
+                    // Pull out the first event on the public timeline
+//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
+                    //                   String tweetText = firstEvent.getString("text");
+                    //                  System.out.println("HTTPRESPONSE");
+                    // Do something with the response
+                    //                  System.out.println(tweetText);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                Intent intent = new Intent();
+                intent.setAction("outbound.ai.outbound.WAYPOINTS_UPDATED");
+                activity.sendBroadcast(intent);
+
+            }
+
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
+                try {
+                    // Pull out the first event on the public timeline
+                    JSONObject firstEvent = (JSONObject)timeline.get(0);
+                    String tweetText = firstEvent.getString("text");
+                    System.out.println("HTTPRESPONSE");
+                    // Do something with the response
+                    System.out.println(tweetText);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
 
 }
