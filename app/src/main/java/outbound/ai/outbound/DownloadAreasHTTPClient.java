@@ -65,10 +65,13 @@ public class DownloadAreasHTTPClient {
                             a.setName( properties.optString("name"));
                             a.setCallsign( properties.optString("callsign"));
                             a.setActivity( properties.optString("activity"));
+                            a.setActivityType( properties.optString("activitytype"));
                             a.setAirspaceClass(properties.optString("airspaceclass"));
                             a.setRmk(properties.optString("rmk"));
                             a.setUpper(properties.optString("upper"));
                             a.setLower(properties.optString("lower"));
+                            a.setActive(properties.optBoolean("active"));
+                            a.setCenter(new LatLng( Double.parseDouble(properties.optString("lat")), Double.parseDouble(properties.optString("lng"))));
                             JSONObject geometry  = (JSONObject) feature.get("geometry");
                             JSONArray coords = geometry.getJSONArray("coordinates").getJSONArray(0);
                             List<LatLng> cs = new LinkedList<LatLng>();
@@ -144,8 +147,10 @@ public class DownloadAreasHTTPClient {
                             a.setAirspaceClass(properties.optString("airspaceclass"));
                             a.setRmk(properties.optString("rmk"));
                             a.setUrl(properties.optString("url"));
-                            a.setUpper(properties.optString("upper"));
+                             a.setUpper(properties.optString("upper"));
                             a.setLower(properties.optString("lower"));
+                            //            a.setCenter(new LatLng( Double.parseDouble(properties.optString("lat")), Double.parseDouble(properties.optString("lng"))));
+                            a.setActive(properties.optBoolean("active"));
                             JSONObject geometry  = (JSONObject) feature.get("geometry");
                             JSONArray coords = geometry.getJSONArray("coordinates").getJSONArray(0);
                             List<LatLng> cs = new LinkedList<LatLng>();
@@ -218,8 +223,10 @@ public class DownloadAreasHTTPClient {
                             a.setName( properties.optString("name"));
                             a.setDescription( properties.optString("description"));
                             a.setAirspaceClass(properties.optString("airspaceclass"));
-                            a.setCenter(new LatLng( Double.parseDouble(properties.optString("lat")), Double.parseDouble(properties.optString("lng"))));
-
+                            a.setUpper(properties.optString("upper"));
+                            a.setLower(properties.optString("lower"));
+                //            a.setCenter(new LatLng( Double.parseDouble(properties.optString("lat")), Double.parseDouble(properties.optString("lng"))));
+                            a.setActive(properties.optBoolean("active"));
                             JSONObject geometry  = (JSONObject) feature.get("geometry");
                             JSONArray coords = geometry.getJSONArray("coordinates").getJSONArray(0);
                             List<LatLng> cs = new LinkedList<LatLng>();
@@ -278,7 +285,7 @@ public class DownloadAreasHTTPClient {
 
                 try {
                     JSONArray features = response.getJSONArray("features");
-                    List<Aerodrome> airspaceList = new LinkedList<Aerodrome>();
+                    ;
 
                     for( int i = 0; i < features.length(); i++) {
 
@@ -323,13 +330,13 @@ public class DownloadAreasHTTPClient {
                                 cs.add(ll);
                             }
                             a.setCoordinates( cs);
-                            airspaceList.add(a);
+                            LocalData.aerodromes.put(a.getCode(),a);
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
                     }
 
-                    LocalData.aerodromes = airspaceList;
+
                     // Pull out the first event on the public timeline
 //                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
                     //                   String tweetText = firstEvent.getString("text");
@@ -367,7 +374,7 @@ public class DownloadAreasHTTPClient {
 
     public void getAirports()  {
         System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("runways.geojson", null, new JsonHttpResponseHandler() {
+        DownloadAreasHTTPClient.get("airfields.geojson", null, new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 // If the response is JSONObject instead of expected JSONArray
@@ -405,6 +412,27 @@ public class DownloadAreasHTTPClient {
                                 cs.add(ll);
                             }
                             a.setCoordinates( cs);
+
+
+                            JSONArray rws = properties.getJSONArray("runways");
+                            List<Runway> rs = new LinkedList<Runway>();
+
+                            for( int iii = 0; iii < rws.length(); iii++) {
+                                JSONObject rj  = (JSONObject) rws.get(iii);
+                                JSONArray nms = rj.getJSONArray("names");
+                                List<String> names = new LinkedList<>();
+                                for(int iiii=0; iiii<nms.length();iiii++) {
+                                    names.add(nms.get(iiii).toString());
+                                }
+
+                                JSONObject st = rj.getJSONObject("start");
+                                LatLng llstart = new LatLng( Double.parseDouble(st.optString("lat")), Double.parseDouble(st.optString("lng")));
+                                LatLng llend = new LatLng( Double.parseDouble(st.optString("lat")), Double.parseDouble(st.optString("lng")));
+                                 rs.add(new Runway( names, llstart,llend ));
+                            }
+                            a.setRunways(rs);
+
+
                             airspaceList.add(a);
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -520,5 +548,88 @@ public class DownloadAreasHTTPClient {
             }
         });
     }
+
+
+    public void getObstacles()  {
+        System.out.println("HTTPREQUEST");
+        DownloadAreasHTTPClient.get("obstacles.geojson", null, new JsonHttpResponseHandler() {
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                // If the response is JSONObject instead of expected JSONArray
+                System.out.println("HTTPRESPONSE with JSONObject");
+
+                try {
+                    JSONArray features = response.getJSONArray("features");
+                    List<Obstacle> airspaceList = new LinkedList<>();
+
+                    for( int i = 0; i < features.length(); i++) {
+
+                        try {
+
+                            JSONObject feature  = (JSONObject) features.get(i);
+
+                            JSONObject properties  = (JSONObject) feature.get("properties");
+
+                            Obstacle a = new Obstacle();
+                            a.setName( properties.optString("name"));
+                            a.setType( properties.optString("type"));
+                            a.setElevation(properties.optInt("elev"));
+                            a.setCenter(new LatLng( Double.parseDouble(properties.optString("lat")), Double.parseDouble(properties.optString("lng"))));
+
+                            JSONObject geometry  = (JSONObject) feature.get("geometry");
+                            JSONArray coords = geometry.getJSONArray("coordinates").getJSONArray(0);
+                            double lat = 0;
+                            double lng = 0;
+                            for( int ii = 0; ii < coords.length(); ii++) {
+                                JSONArray coord = (JSONArray) coords.get(ii);
+                                lat += coord.getDouble(1);
+                                lng += coord.getDouble(0);
+                            }
+
+                            a.setCenter(new LatLng( lat/coords.length(), lng/coords.length()));
+
+
+                            airspaceList.add(a);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    LocalData.obstacles = airspaceList;
+                    // Pull out the first event on the public timeline
+//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
+                    //                   String tweetText = firstEvent.getString("text");
+                    //                  System.out.println("HTTPRESPONSE");
+                    // Do something with the response
+                    //                  System.out.println(tweetText);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                Intent intent = new Intent();
+                intent.setAction("outbound.ai.outbound.OBSTACLES_UPDATED");
+                activity.sendBroadcast(intent);
+
+            }
+
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
+                try {
+                    // Pull out the first event on the public timeline
+                    JSONObject firstEvent = (JSONObject)timeline.get(0);
+                    String tweetText = firstEvent.getString("text");
+                    System.out.println("HTTPRESPONSE");
+                    // Do something with the response
+                    System.out.println(tweetText);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+
+
+
 
 }

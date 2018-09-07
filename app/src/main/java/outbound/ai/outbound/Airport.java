@@ -13,6 +13,7 @@ public class Airport {
 
     List<LatLng> coordinates;
     List<String> notams;
+    List<Runway> runways;
 
     public String getName() {
         return name;
@@ -52,5 +53,13 @@ public class Airport {
 
     public void setCenter(LatLng center) {
         this.center = center;
+    }
+
+    public List<Runway> getRunways() {
+        return runways;
+    }
+
+    public void setRunways(List<Runway> runways) {
+        this.runways = runways;
     }
 }

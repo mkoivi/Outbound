@@ -6,6 +6,8 @@ public class Supplement extends Airspace {
     String endTime;
     String url;
 
+    boolean active = false;
+
     public String getStartTime() {
         return startTime;
     }
@@ -28,5 +30,13 @@ public class Supplement extends Airspace {
 
     public void setUrl(String url) {
         this.url = url;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 }

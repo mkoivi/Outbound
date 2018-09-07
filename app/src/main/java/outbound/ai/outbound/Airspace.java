@@ -8,10 +8,13 @@ public class Airspace {
     String name;
     String callsign;
 
+    LatLng center;
     List<LatLng> coordinates;
+
 
     String airspaceClass;
     String activity;
+    String activityType;
     String lang;
     String rmk;
 
@@ -20,6 +23,7 @@ public class Airspace {
     int upperFt;
     int lowerFt;
 
+    boolean active = false;
 
     public String getName() {
         return name;
@@ -107,5 +111,29 @@ public class Airspace {
 
     public void setLowerFt(int lowerFt) {
         this.lowerFt = lowerFt;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public LatLng getCenter() {
+        return center;
+    }
+
+    public void setCenter(LatLng center) {
+        this.center = center;
+    }
+
+    public String getActivityType() {
+        return activityType;
+    }
+
+    public void setActivityType(String activityType) {
+        this.activityType = activityType;
     }
 }
