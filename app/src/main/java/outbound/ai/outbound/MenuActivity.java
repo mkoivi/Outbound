@@ -2,6 +2,7 @@ package outbound.ai.outbound;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -10,7 +11,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.drawable.Drawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.location.Location;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
@@ -20,13 +21,14 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
-import android.widget.RelativeLayout;
+import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
@@ -34,6 +36,7 @@ import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.GoogleMapOptions;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
@@ -48,7 +51,10 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-public class MenuActivity extends AppCompatActivity implements OnMapReadyCallback,  ActivityCompat.OnRequestPermissionsResultCallback ,GoogleMap.OnCameraMoveListener,GoogleMap.OnCameraIdleListener,GoogleMap.OnPolygonClickListener , GoogleMap.OnMyLocationButtonClickListener, GoogleMap.OnMyLocationClickListener, GoogleMap.OnMarkerClickListener, GoogleMap.OnMapClickListener {
+public class MenuActivity extends AppCompatActivity implements OnMapReadyCallback,  ActivityCompat.OnRequestPermissionsResultCallback ,GoogleMap.OnCameraMoveListener,GoogleMap.OnCameraIdleListener,GoogleMap.OnPolygonClickListener ,  GoogleMap.OnMarkerClickListener, GoogleMap.OnMapClickListener {
+
+
+    private final static String TAG = "OB:MenuActivity";
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private boolean mPermissionDenied = false;
@@ -58,39 +64,53 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     static HashMap<String, Bitmap> markerCache = new HashMap<>();
 
+    Menu headerMenu;
+
     List<Marker> airspaceMarkers = new LinkedList<>();
     List<Marker> airportMarkers = new LinkedList<Marker>();
     List<Marker> aerodromeMarkers = new LinkedList<Marker>();
     List<Marker> waypointMarkers = new LinkedList<>();
     List<Marker> obstacleMarkers = new LinkedList<>();
 
+    List<BroadcastReceiver> receivers = new LinkedList<>();
+
     private CameraPosition prevCameraPosition = null;
     private TextView mTextMessage;
+    boolean myLocationEnabled = false;
+    boolean followingUser = false;
 
-    public final float WAYPOINT_ZOOM_LIMIT=8f;
-    public final float AIRSPACE_LABEL_ZOOM_LIMIT=9.6f;
-    public final float OBSTACLE_ZOOM_LIMIT=9.3f;
+    public final float WAYPOINT_ZOOM_LIMIT = 8f;
+    public final float AIRSPACE_LABEL_ZOOM_LIMIT = 9.6f;
+    public final float OBSTACLE_ZOOM_LIMIT = 9.3f;
     private ConstraintLayout aerodromeView;
+    private LinearLayout flightInfo;
 
-     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
-              = new BottomNavigationView.OnNavigationItemSelectedListener() {
+    private LatLng mapLoc; // current map 'target'
+    private Location loc;
+    private Marker myPlaneMarker = null;
+    private boolean flightMode = false;
 
-          @Override
-          public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-              switch (item.getItemId()) {
-                  case R.id.navigation_home:
-                      mTextMessage.setText(R.string.title_home);
-                      return true;
-                  case R.id.navigation_dashboard:
-                      mTextMessage.setText(R.string.title_dashboard);
-                      return true;
-                  case R.id.navigation_notifications:
-                      mTextMessage.setText(R.string.title_notifications);
-                      return true;
-              }
-              return false;
-          }
-      };
+    private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
+            = new BottomNavigationView.OnNavigationItemSelectedListener() {
+
+        @Override
+        public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+            switch (item.getItemId()) {
+                case R.id.navigation_home:
+                    mTextMessage.setText(R.string.title_home);
+                    return true;
+                case R.id.navigation_dashboard:
+                    mTextMessage.setText(R.string.title_dashboard);
+                    return true;
+                case R.id.navigation_notifications:
+                    mTextMessage.setText(R.string.title_notifications);
+                    return true;
+            }
+            return false;
+        }
+    };
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,6 +120,10 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         aerodromeView = (ConstraintLayout) findViewById(R.id.aerodrome);
         aerodromeView.setVisibility(View.GONE);
 
+        flightInfo = (LinearLayout) findViewById(R.id.flight_info);
+        flightInfo.setVisibility(View.GONE);
+
+
         mTextMessage = (TextView) findViewById(R.id.message);
         BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
         navigation.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
@@ -108,6 +132,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+
     }
 
 
@@ -127,173 +153,191 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         // Add a marker in Sydney and move the camera
         LatLng deflt = new LatLng(61.2, 24.4);
 
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(deflt,6.8f));
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(deflt, 6.8f));
         mMap.setOnPolygonClickListener(this);
         mMap.setOnCameraMoveListener(this);
         mMap.setOnCameraIdleListener(this);
         mMap.setOnMapClickListener(this);
-        mMap.setOnMyLocationButtonClickListener(this);
-        mMap.setOnMyLocationClickListener(this);
-        enableMyLocation();
+   //     mMap.setOnMyLocationButtonClickListener(this);
+   //     mMap.setOnMyLocationClickListener(this);
+   //     enableMyLocation();
+
+        GoogleMapOptions options = new GoogleMapOptions();
+        options.compassEnabled(true)
+                .rotateGesturesEnabled(true)
+                .tiltGesturesEnabled(false).zOrderOnTop(false).zoomGesturesEnabled(true).zoomControlsEnabled(true);
 
 
         mMap.setOnMarkerClickListener(this);
-          httpClient = new DownloadAreasHTTPClient(this);
-        Toast.makeText(this, "Loading airspace segments",
-                Toast.LENGTH_SHORT).show();
-        httpClient.getAirspaces();
+        httpClient = new DownloadAreasHTTPClient(this);
+
+        setupData();
 
 
-        IntentFilter filter = new IntentFilter("outbound.ai.outbound.AIRSPACE_UPDATED");
-        BroadcastReceiver receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                System.out.println("Received airpace data");
-                updateAirspace();
-                Toast.makeText(MenuActivity.this, "Loading supplements",
-                        Toast.LENGTH_SHORT).show();
-                httpClient.getSupplements();
+    }
 
-            }
-        };
-        registerReceiver(receiver, filter);
+    private void setupData() {
+       new Thread(new Runnable() {
+                public void run() {
 
-        IntentFilter filter2 = new IntentFilter("outbound.ai.outbound.SUPPLEMENTS_UPDATED");
-        BroadcastReceiver receiver2 = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                System.out.println("Received supplements data");
-           updateSupplements();
-                httpClient.getAerodromes();
-                Toast.makeText(MenuActivity.this, "Loading aerodromes",
-                        Toast.LENGTH_SHORT).show();
-            }
-        };
-        registerReceiver(receiver2, filter2);
+                IntentFilter filter = new IntentFilter("outbound.ai.outbound.AIRSPACE_UPDATED");
+                BroadcastReceiver receiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received airpace data");
+                        updateAirspace();
+        //                Toast.makeText(MenuActivity.this, "Loading supplements",
+        //                        Toast.LENGTH_SHORT).show();
+                        httpClient.getSupplements();
+                    }
+                };
+                registerReceiver(receiver, filter);
 
-        IntentFilter filter5 = new IntentFilter("outbound.ai.outbound.AERODROMES_UPDATED");
-        BroadcastReceiver receiver5 = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                System.out.println("Received aerodromes data");
-                updateAerodromes();
-                httpClient.getAirports();
-                Toast.makeText(MenuActivity.this, "Loading waypoints",
-                        Toast.LENGTH_SHORT).show();
-                httpClient.getWaypoints();
+                IntentFilter filter2 = new IntentFilter("outbound.ai.outbound.SUPPLEMENTS_UPDATED");
+                BroadcastReceiver receiver2 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received supplements data");
+                        updateSupplements();
+                        httpClient.getAerodromes();
+         //               Toast.makeText(MenuActivity.this, "Loading aerodromes",
+         //                       Toast.LENGTH_SHORT).show();
+                    }
+                };
+                registerReceiver(receiver2, filter2);
 
-            }
-        };
-        registerReceiver(receiver5, filter5);
+                IntentFilter filter5 = new IntentFilter("outbound.ai.outbound.AERODROMES_UPDATED");
+                BroadcastReceiver receiver5 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received aerodromes data");
+                        updateAerodromes();
+      //                  Toast.makeText(MenuActivity.this, "Loading airports",
+      //                          Toast.LENGTH_SHORT).show();
+                        httpClient.getAirports();
+                    }
+                };
+                registerReceiver(receiver5, filter5);
+
+                IntentFilter filter3 = new IntentFilter("outbound.ai.outbound.AIRPORTS_UPDATED");
+                BroadcastReceiver receiver3 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received airports data");
+                        updateAirports();
+       //                 Toast.makeText(MenuActivity.this, "Loading reservations",
+       //                         Toast.LENGTH_SHORT).show();
+                        httpClient.getReservations();
+
+                    }
+                };
+                registerReceiver(receiver3, filter3);
+
+                IntentFilter filter4 = new IntentFilter("outbound.ai.outbound.RESERVATIONS_UPDATED");
+                BroadcastReceiver receiver4 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received reservations data");
+                        updateReservations();
+                        //                     Toast.makeText(MenuActivity.this, "Loading waypoints",
+   //                             Toast.LENGTH_SHORT).show();
+                        httpClient.getWaypoints();
+                    }
+                };
+                registerReceiver(receiver4, filter4);
+
+                IntentFilter filter6 = new IntentFilter("outbound.ai.outbound.WAYPOINTS_UPDATED");
+                BroadcastReceiver receiver6 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received reservations data");
+                        updateWaypoints();
+      //                  Toast.makeText(MenuActivity.this, "Loading obstacles",
+      //                          Toast.LENGTH_SHORT).show();
+
+                        httpClient.getObstacles();
+
+                    }
+                };
+                registerReceiver(receiver6, filter6);
+
+                IntentFilter filter7 = new IntentFilter("outbound.ai.outbound.OBSTACLES_UPDATED");
+                BroadcastReceiver receiver7 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received reservations data");
+                        updateObstacles();
+
+                    }
+                };
+                registerReceiver(receiver7, filter7);
 
 
-        IntentFilter filter3 = new IntentFilter("outbound.ai.outbound.AIRPORTS_UPDATED");
-        BroadcastReceiver receiver3 = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                System.out.println("Received airports data");
-                updateAirports();
-                Toast.makeText(MenuActivity.this, "Loading reservations",
-                        Toast.LENGTH_SHORT).show();
-                httpClient.getReservations();
+       //         Toast.makeText(MenuActivity.this, "Loading airspace segments",
+         //               Toast.LENGTH_SHORT).show();
+                httpClient.getAirspaces();
 
-            }
-        };
-        registerReceiver(receiver3, filter3);
 
-        IntentFilter filter4 = new IntentFilter("outbound.ai.outbound.RESERVATIONS_UPDATED");
-        BroadcastReceiver receiver4 = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                System.out.println("Received reservations data");
-                updateReservations();
-            }
-        };
-        registerReceiver(receiver4, filter4);
 
-        IntentFilter filter6 = new IntentFilter("outbound.ai.outbound.WAYPOINTS_UPDATED");
-        BroadcastReceiver receiver6 = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                System.out.println("Received reservations data");
-                updateWaypoints();
-                Toast.makeText(MenuActivity.this, "Loading obstacles",
-                        Toast.LENGTH_SHORT).show();
-                httpClient.getObstacles();
+                }
+            }).start();
 
-            }
-        };
-        registerReceiver(receiver6, filter6);
 
-        IntentFilter filter7 = new IntentFilter("outbound.ai.outbound.OBSTACLES_UPDATED");
-        BroadcastReceiver receiver7 = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                System.out.println("Received reservations data");
-               updateObstacles();
-               Toast.makeText(MenuActivity.this, "Ready!",
-                        Toast.LENGTH_SHORT).show();
-            }
-        };
-        registerReceiver(receiver7, filter7);
     }
 
 
-
-
-
     public void updateAirspace() {
-        for( Marker m: airspaceMarkers) {
+        for (Marker m : airspaceMarkers) {
             m.remove();
         }
         airspaceMarkers.clear();
 
-        for( Airspace a: LocalData.airspaces) {
+        for (Airspace a : LocalData.airspaces) {
 
-            if( a.getAirspaceClass().equals("Danger") && !a.isActive())
+            if (a.getAirspaceClass().equals("Danger") && !a.isActive())
                 continue;
 
 
             PolygonOptions rectOptions = new PolygonOptions();
 
-      //      if( !a.getLower().startsWith("FL")) {
-       //         rectOptions.fillColor(Color.argb(100,255,160,90));
-      //      }
-            if( (a.getAirspaceClass().equals("A") || a.getAirspaceClass().equals("B") || a.getAirspaceClass().equals("C") || a.getAirspaceClass().equals("D")) && !a.getLower().contains("FL")  ) {
-                rectOptions.fillColor(Color.argb(50,255,160,90));
+            //      if( !a.getLower().startsWith("FL")) {
+            //         rectOptions.fillColor(Color.argb(100,255,160,90));
+            //      }
+            if ((a.getAirspaceClass().equals("A") || a.getAirspaceClass().equals("B") || a.getAirspaceClass().equals("C") || a.getAirspaceClass().equals("D")) && !a.getLower().contains("FL")) {
+                rectOptions.fillColor(Color.argb(50, 255, 160, 90));
             }
-            if( (a.getAirspaceClass().equals("Prohibited")))  {
-                rectOptions.fillColor(Color.argb(160,255,0,0));
+            if ((a.getAirspaceClass().equals("Prohibited"))) {
+                rectOptions.fillColor(Color.argb(160, 255, 0, 0));
             }
-            if( (a.getAirspaceClass().equals("Restricted") && a.getActivity().equals("H24") || (a.getAirspaceClass().equals("Restricted") && a.isActive()) ))  {
-                rectOptions.fillColor(Color.argb(90,255,0,0));
+            if ((a.getAirspaceClass().equals("Restricted") && a.getActivity().equals("H24") || (a.getAirspaceClass().equals("Restricted") && a.isActive()))) {
+                rectOptions.fillColor(Color.argb(90, 255, 0, 0));
             }
-            if( (a.getActivityType().equals("NO-NOISE") ))  {
-                rectOptions.fillColor(Color.argb(100,100,100,100));
+            if ((a.getActivityType().equals("NO-NOISE"))) {
+                rectOptions.fillColor(Color.argb(100, 100, 100, 100));
             }
             rectOptions.strokeWidth(3.5f);
 
-            double centerLat =0;
+            double centerLat = 0;
             double centerLng = 0;
             int counter = 0;
             LatLng prevLL = null;
             LatLng center = a.getCenter();
-            for( LatLng ll:a.getCoordinates()) {
-                rectOptions.add( ll);
+            for (LatLng ll : a.getCoordinates()) {
+                rectOptions.add(ll);
                 centerLat += ll.latitude;
                 centerLng += ll.longitude;
-                if( counter > 0 && HelperLibrary.distance(ll,prevLL) > 6000 && !a.getAirspaceClass().equals("Danger") && !a.getAirspaceClass().equals("Restricted")) {
-                    Marker m=addAirspaceMarker(new LatLng((ll.latitude+prevLL.latitude)/2, (ll.longitude+prevLL.longitude)/2), a.getAirspaceClass(),a.getUpper(),a.getLower(), a.getName());
+                if (counter > 0 && HelperLibrary.distance(ll, prevLL) > 6000 && !a.getAirspaceClass().equals("Danger") && !a.getAirspaceClass().equals("Restricted")) {
+                    Marker m = addAirspaceMarker(new LatLng((ll.latitude + prevLL.latitude) / 2, (ll.longitude + prevLL.longitude) / 2), a.getAirspaceClass(), a.getUpper(), a.getLower(), a.getName());
                     float ax = 0.5f;
                     float ay = 0.5f;
-                    if( center.longitude < ll.longitude)
-                        ax=1f;
+                    if (center.longitude < ll.longitude)
+                        ax = 1f;
                     else
-                        ax=0f;
-                    if( center.latitude < ll.latitude)
-                        ay=0f;
+                        ax = 0f;
+                    if (center.latitude < ll.latitude)
+                        ay = 0f;
                     else
-                        ay=1f;
+                        ay = 1f;
 
                     m.setAnchor(ax, ay);
                     airspaceMarkers.add(m);
@@ -311,37 +355,37 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             polygon.setClickable(true);
 
 
-                airspaceMarkers.add(addAirspaceMarker(new LatLng(centerLat, centerLng), a.getAirspaceClass(), a.getUpper(), a.getLower(), a.getName()));
+            airspaceMarkers.add(addAirspaceMarker(new LatLng(centerLat, centerLng), a.getAirspaceClass(), a.getUpper(), a.getLower(), a.getName()));
 
         }
 
-   }
+    }
 
 
     public void updateSupplements() {
 
-        for( Supplement a: LocalData.supplements) {
+        for (Supplement a : LocalData.supplements) {
             PolygonOptions rectOptions = new PolygonOptions();
 
             //      if( !a.getLower().startsWith("FL")) {
             //         rectOptions.fillColor(Color.argb(100,255,160,90));
             //      }
 
-            if( a.isActive())
-                rectOptions.fillColor(Color.argb(70,255,160,90));
+            if (a.isActive())
+                rectOptions.fillColor(Color.argb(70, 255, 160, 90));
 
             rectOptions.strokeWidth(3.5f);
 
-            double centerLat =0;
+            double centerLat = 0;
             double centerLng = 0;
             int counter = 0;
             LatLng prevLL = null;
-            for( LatLng ll:a.getCoordinates()) {
-                rectOptions.add( ll);
+            for (LatLng ll : a.getCoordinates()) {
+                rectOptions.add(ll);
                 centerLat += ll.latitude;
                 centerLng += ll.longitude;
-                if( counter > 0 && HelperLibrary.distance(ll,prevLL) > 6000 && a.isActive())
-                    airspaceMarkers.add(addAirspaceMarker(new LatLng((ll.latitude+prevLL.latitude)/2, (ll.longitude+prevLL.longitude)/2), a.getAirspaceClass(),a.getUpper(),a.getLower(), a.getName()));
+                if (counter > 0 && HelperLibrary.distance(ll, prevLL) > 6000 && a.isActive())
+                    airspaceMarkers.add(addAirspaceMarker(new LatLng((ll.latitude + prevLL.latitude) / 2, (ll.longitude + prevLL.longitude) / 2), a.getAirspaceClass(), a.getUpper(), a.getLower(), a.getName()));
                 prevLL = ll;
                 counter++;
             }
@@ -352,35 +396,35 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             polygon.setTag(a.name);
             polygon.setClickable(true);
 
-            airspaceMarkers.add(addAirspaceMarker(new LatLng(centerLat, centerLng), a.getAirspaceClass(),a.getUpper(),a.getLower(), a.getName()));
+            airspaceMarkers.add(addAirspaceMarker(new LatLng(centerLat, centerLng), a.getAirspaceClass(), a.getUpper(), a.getLower(), a.getName()));
 
         }
     }
 
     public void updateReservations() {
 
-        for( Reservation a: LocalData.reservations) {
+        for (Reservation a : LocalData.reservations) {
 
-            if( !a.isActive() )
+            if (!a.isActive())
                 continue;
 
             PolygonOptions rectOptions = new PolygonOptions();
 
-            if(a.isActive() ) // TODO: set configurable lower setting
-                rectOptions.fillColor(Color.argb(20,0,0,200));
+            if (a.isActive()) // TODO: set configurable lower setting
+                rectOptions.fillColor(Color.argb(20, 0, 0, 200));
 
-           rectOptions.strokeWidth(3.5f);
+            rectOptions.strokeWidth(3.5f);
 
-            double centerLat =0;
+            double centerLat = 0;
             double centerLng = 0;
             int counter = 0;
             LatLng prevLL = null;
-            for( LatLng ll:a.getCoordinates()) {
-                rectOptions.add( ll);
+            for (LatLng ll : a.getCoordinates()) {
+                rectOptions.add(ll);
                 centerLat += ll.latitude;
                 centerLng += ll.longitude;
-                if( counter > 0 && HelperLibrary.distance(ll,prevLL) > 6000 && a.isActive())
-                    airspaceMarkers.add(addAirspaceMarker(new LatLng((ll.latitude+prevLL.latitude)/2, (ll.longitude+prevLL.longitude)/2), a.getAirspaceClass(),a.getUpper(),a.getLower(), a.getName()));
+                if (counter > 0 && HelperLibrary.distance(ll, prevLL) > 6000 && a.isActive())
+                    airspaceMarkers.add(addAirspaceMarker(new LatLng((ll.latitude + prevLL.latitude) / 2, (ll.longitude + prevLL.longitude) / 2), a.getAirspaceClass(), a.getUpper(), a.getLower(), a.getName()));
                 prevLL = ll;
                 counter++;
             }
@@ -391,7 +435,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             polygon.setTag(a.name);
             polygon.setClickable(true);
 
-            airspaceMarkers.add(addAirspaceMarker(new LatLng(centerLat, centerLng), a.getAirspaceClass(),a.getUpper(),a.getLower(), a.getName()));
+            airspaceMarkers.add(addAirspaceMarker(new LatLng(centerLat, centerLng), a.getAirspaceClass(), a.getUpper(), a.getLower(), a.getName()));
 
         }
     }
@@ -399,15 +443,15 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     public void updateAirports() {
 
-        for( Marker m: airportMarkers) {
+        for (Marker m : airportMarkers) {
             m.remove();
         }
         airportMarkers.clear();
 
-        for( Airport a: LocalData.airports) {
+        for (Airport a : LocalData.airports.values()) {
 
             List<Runway> rs = a.getRunways();
-            for( Runway r :rs) {
+            for (Runway r : rs) {
                 try {
                     int rotation = 0;
                     rotation = Integer.parseInt(r.getNames().get(0).substring(0, 2) + "0") + 7;
@@ -418,20 +462,20 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
 
 
-            airportMarkers.add(addAerodromeMarker( a.getCenter(), a.getCode(), 90, a.getCode()));
+            airportMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), 90, a.getCode()));
         }
     }
 
 
     public void updateAerodromes() {
-        for( Marker m: aerodromeMarkers) {
+        for (Marker m : aerodromeMarkers) {
             m.remove();
         }
         aerodromeMarkers.clear();
-        for( Aerodrome a: LocalData.aerodromes.values()) {
+        for (Aerodrome a : LocalData.aerodromes.values()) {
 
             List<Runway> rs = a.getRunways();
-            for( Runway r :rs) {
+            for (Runway r : rs) {
                 try {
                     int rotation = 0;
                     rotation = Integer.parseInt(r.id.substring(0, 2) + "0") + 7;
@@ -446,22 +490,22 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
     public void updateWaypoints() {
-        for( Marker m: waypointMarkers) {
+        for (Marker m : waypointMarkers) {
             m.remove();
         }
         waypointMarkers.clear();
-        for( Waypoint a: LocalData.waypoints) {
-               waypointMarkers.add(addWaypointMarker(a.getCenter(),a.getName()));
-            }
+        for (Waypoint a : LocalData.waypoints) {
+            waypointMarkers.add(addWaypointMarker(a.getCenter(), a.getName()));
+        }
     }
 
     public void updateObstacles() {
-        for( Marker m: obstacleMarkers) {
+        for (Marker m : obstacleMarkers) {
             m.remove();
         }
         obstacleMarkers.clear();
-        for( Obstacle a: LocalData.obstacles) {
-            obstacleMarkers.add(addObstacleMarker( a.getCenter(),a.getName(),a.getType(),a.getElevation()));
+        for (Obstacle a : LocalData.obstacles) {
+            obstacleMarkers.add(addObstacleMarker(a.getCenter(), a.getName(), a.getType(), a.getElevation()));
 
         }
     }
@@ -471,8 +515,9 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onPolygonClick(Polygon p) {
         // Flip from solid stroke to dotted stroke pattern.
         System.out.println("clicked polygon " + p.getTag().toString());
-        Toast.makeText(this, ""+ p.getTag().toString(),
-                Toast.LENGTH_SHORT).show();
+        hideAerodromeView();
+        //Toast.makeText(this, ""+ p.getTag().toString(),
+        //        Toast.LENGTH_SHORT).show();
     }
 
 
@@ -497,11 +542,11 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .position(pos)
                 .title(tooltipTitle)
                 .snippet("Details")
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "as_"+ cls+upper+lower))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "as_" + cls + upper + lower))));
 
 
         final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
-        if( mMap.getCameraPosition().zoom < AIRSPACE_LABEL_ZOOM_LIMIT)
+        if (mMap.getCameraPosition().zoom < AIRSPACE_LABEL_ZOOM_LIMIT)
             customMarker.setVisible(false);
         /*    if (mapView.getViewTreeObserver().isAlive()) {
                 mapView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
@@ -522,7 +567,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         return customMarker;
     }
 
-       public Marker addAerodromeMarker(LatLng pos, String title, int rotation, String code) {
+    public Marker addAerodromeMarker(LatLng pos, String title, int rotation, String code) {
 
         View marker = ((LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE)).inflate(R.layout.aerodrome_symbol, null);
         TextView numTxt = (TextView) marker.findViewById(R.id.num_txt);
@@ -536,7 +581,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "ad_" + title + rotation))));
 
 
-            final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
+        final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
 
         /*    if (mapView.getViewTreeObserver().isAlive()) {
                 mapView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
@@ -554,7 +599,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     }
                 });
             }*/
-            return customMarker;
+        return customMarker;
     }
 
 
@@ -562,15 +607,15 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         View marker = ((LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE)).inflate(R.layout.waypoint_symbol, null);
         TextView numTxt = (TextView) marker.findViewById(R.id.num_txt);
         numTxt.setText(title);
-          Marker customMarker = mMap.addMarker(new MarkerOptions()
+        Marker customMarker = mMap.addMarker(new MarkerOptions()
                 .position(pos)
                 .title("Title")
                 .snippet("Description")
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "wp_"+title))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "wp_" + title))));
 
 
         final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
-        if( mMap.getCameraPosition().zoom < WAYPOINT_ZOOM_LIMIT)
+        if (mMap.getCameraPosition().zoom < WAYPOINT_ZOOM_LIMIT)
             customMarker.setVisible(false);
 
         /*    if (mapView.getViewTreeObserver().isAlive()) {
@@ -595,17 +640,17 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     public Marker addObstacleMarker(LatLng pos, String title, String type, int elevation) {
         View marker = ((LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE)).inflate(R.layout.obstacle_marker, null);
         TextView numTxt = (TextView) marker.findViewById(R.id.elevation_txt);
-        numTxt.setText(""+elevation);
+        numTxt.setText("" + elevation);
         Marker customMarker = mMap.addMarker(new MarkerOptions()
                 .position(pos)
                 .title(title)
                 .snippet(type)
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "obs_"+title+type+elevation))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "obs_" + title + type + elevation))));
 
 
         final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
-     //   if( mMap.getCameraPosition().zoom < WAYPOINT_ZOOM_LIMIT)
-            customMarker.setVisible(false);
+        //   if( mMap.getCameraPosition().zoom < WAYPOINT_ZOOM_LIMIT)
+        customMarker.setVisible(false);
 
         /*    if (mapView.getViewTreeObserver().isAlive()) {
                 mapView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
@@ -630,7 +675,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     // Convert a view to bitmap
     public static Bitmap createDrawableFromView(Context context, View view, String id) {
 
-        if( markerCache.containsKey(id)) {
+        if (markerCache.containsKey(id)) {
             return markerCache.get(id);
         }
 
@@ -652,31 +697,29 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onCameraMove() {
         CameraPosition position = mMap.getCameraPosition();
 
-        if( prevCameraPosition != null ) {
-            if( prevCameraPosition.zoom < WAYPOINT_ZOOM_LIMIT && position.zoom > WAYPOINT_ZOOM_LIMIT) {
+        if (prevCameraPosition != null) {
+            if (prevCameraPosition.zoom < WAYPOINT_ZOOM_LIMIT && position.zoom > WAYPOINT_ZOOM_LIMIT) {
                 for (Marker m : waypointMarkers) {
                     m.setVisible(true);
                 }
-            }
-            else if (  prevCameraPosition.zoom > WAYPOINT_ZOOM_LIMIT && position.zoom < WAYPOINT_ZOOM_LIMIT) {
-                    for (Marker m : waypointMarkers) {
-                        m.setVisible(false);
-                    }
+            } else if (prevCameraPosition.zoom > WAYPOINT_ZOOM_LIMIT && position.zoom < WAYPOINT_ZOOM_LIMIT) {
+                for (Marker m : waypointMarkers) {
+                    m.setVisible(false);
                 }
+            }
         }
-        if( prevCameraPosition != null ) {
-            if( prevCameraPosition.zoom < AIRSPACE_LABEL_ZOOM_LIMIT && position.zoom > AIRSPACE_LABEL_ZOOM_LIMIT) {
+        if (prevCameraPosition != null) {
+            if (prevCameraPosition.zoom < AIRSPACE_LABEL_ZOOM_LIMIT && position.zoom > AIRSPACE_LABEL_ZOOM_LIMIT) {
                 for (Marker m : airspaceMarkers) {
                     m.setVisible(true);
                 }
-            }
-            else if (  prevCameraPosition.zoom > AIRSPACE_LABEL_ZOOM_LIMIT && position.zoom < AIRSPACE_LABEL_ZOOM_LIMIT) {
+            } else if (prevCameraPosition.zoom > AIRSPACE_LABEL_ZOOM_LIMIT && position.zoom < AIRSPACE_LABEL_ZOOM_LIMIT) {
                 for (Marker m : airspaceMarkers) {
                     m.setVisible(false);
                 }
             }
         }
-        if ( prevCameraPosition!= null && mMap.getCameraPosition() != null && prevCameraPosition.zoom > OBSTACLE_ZOOM_LIMIT && mMap.getCameraPosition().zoom < OBSTACLE_ZOOM_LIMIT) {
+        if (prevCameraPosition != null && mMap.getCameraPosition() != null && prevCameraPosition.zoom > OBSTACLE_ZOOM_LIMIT && mMap.getCameraPosition().zoom < OBSTACLE_ZOOM_LIMIT) {
             for (Marker m : obstacleMarkers) {
                 m.setVisible(false);
             }
@@ -689,13 +732,12 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onCameraIdle() {
         LatLng ll = mMap.getCameraPosition().target;
 
-        if( mMap.getCameraPosition().zoom > OBSTACLE_ZOOM_LIMIT) {
+        if (mMap.getCameraPosition().zoom > OBSTACLE_ZOOM_LIMIT) {
             for (Marker m : obstacleMarkers) {
-                if( Math.abs(m.getPosition().latitude - ll.latitude) < 0.3 && Math.abs(m.getPosition().longitude - ll.longitude) < 0.35 ) {
+                if (Math.abs(m.getPosition().latitude - ll.latitude) < 0.3 && Math.abs(m.getPosition().longitude - ll.longitude) < 0.35) {
                     if (!m.isVisible())
                         m.setVisible(true);
-                }
-                else {
+                } else {
                     if (m.isVisible())
                         m.setVisible(false);
                 }
@@ -703,40 +745,13 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
 
-        if ( prevCameraPosition!= null && mMap.getCameraPosition() != null && prevCameraPosition.zoom > OBSTACLE_ZOOM_LIMIT && mMap.getCameraPosition().zoom < OBSTACLE_ZOOM_LIMIT) {
+        if (prevCameraPosition != null && mMap.getCameraPosition() != null && prevCameraPosition.zoom > OBSTACLE_ZOOM_LIMIT && mMap.getCameraPosition().zoom < OBSTACLE_ZOOM_LIMIT) {
             for (Marker m : obstacleMarkers) {
                 m.setVisible(false);
             }
         }
     }
 
-    /**
-     * Enables the My Location layer if the fine location permission has been granted.
-     */
-    private void enableMyLocation() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            // Permission to access the location is missing.
-            PermissionUtils.requestPermission(this, LOCATION_PERMISSION_REQUEST_CODE,
-                    Manifest.permission.ACCESS_FINE_LOCATION, true);
-        } else if (mMap != null) {
-            // Access to the location has been granted to the app.
-            mMap.setMyLocationEnabled(true);
-        }
-    }
-
-    @Override
-    public boolean onMyLocationButtonClick() {
-        Toast.makeText(this, "MyLocation button clicked", Toast.LENGTH_SHORT).show();
-        // Return false so that we don't consume the event and the default behavior still occurs
-        // (the camera animates to the user's current position).
-        return false;
-    }
-
-    @Override
-    public void onMyLocationClick(@NonNull Location location) {
-        Toast.makeText(this, "Current location:\n" + location, Toast.LENGTH_LONG).show();
-    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
@@ -748,7 +763,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (PermissionUtils.isPermissionGranted(permissions, grantResults,
                 Manifest.permission.ACCESS_FINE_LOCATION)) {
             // Enable the my location layer if the permission has been granted.
-            enableMyLocation();
+   //         enableMyLocation();
+            startFlightMode();
         } else {
             // Display the missing permission error dialog when the fragments resume.
             mPermissionDenied = true;
@@ -773,43 +789,42 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .newInstance(true).show(getSupportFragmentManager(), "dialog");
     }
 
+    public void showAirportView(String id) {
+        Airport a = LocalData.airports.get(id);
+        TextView name = (TextView) aerodromeView.findViewById(R.id.adName);
+        name.setText(a.getName());
 
-    public void showAerodromeView( String id) {
-        Aerodrome a = LocalData.aerodromes.get(id);
-         TextView name = (TextView) aerodromeView.findViewById(R.id.adName);
-         name.setText(a.getName());
+  //      TextView elev = (TextView) aerodromeView.findViewById(R.id.adelev);
+  //      elev.setText("" + a.getElevation() + " ft MSL");
 
-        TextView elev = (TextView) aerodromeView.findViewById(R.id.adelev);
-        elev.setText("" + a.getElevation() + " MSL ft");
-
-        TableLayout tl = (TableLayout)aerodromeView.findViewById(R.id.rwtable);
+        TableLayout tl = (TableLayout) aerodromeView.findViewById(R.id.rwtable);
 
         tl.removeAllViews();
-        TableRow row = (TableRow)LayoutInflater.from(this).inflate(R.layout.rw_table_row, null);
-        ((TextView)row.findViewById(R.id.rw_id)).setText("RW");
-        ((TextView)row.findViewById(R.id.rw_length)).setText("Length m");
-        ((TextView)row.findViewById(R.id.rw_crosswind)).setText("Crosswind");
-        ((TextView)row.findViewById(R.id.rw_headwind)).setText("Headwind");
+        TableRow row = (TableRow) LayoutInflater.from(this).inflate(R.layout.rw_table_row, null);
+        ((TextView) row.findViewById(R.id.rw_id)).setText("RW");
+        ((TextView) row.findViewById(R.id.rw_length)).setText("Length m");
+        ((TextView) row.findViewById(R.id.rw_crosswind)).setText("Crosswind");
+        ((TextView) row.findViewById(R.id.rw_headwind)).setText("Headwind");
         tl.addView(row);
 
         LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        for(Runway rw:a.getRunways()) {
+        for (Runway rw : a.getRunways()) {
             // Inflate your row "template" and fill out the fields.
 
             if (rw.getId().contains("/")) {
                 TableRow row2 = (TableRow) inflater.inflate(R.layout.rw_table_row, null);
                 ((TextView) row2.findViewById(R.id.rw_id)).setText(rw.id.substring(0, rw.id.indexOf("/")));
                 TextView tvLen = (TextView) row2.findViewById(R.id.rw_length);
-                tvLen.setText(""+rw.length);
+                tvLen.setText("" + rw.length);
                 ((TextView) row2.findViewById(R.id.rw_surface)).setText(rw.surface);
                 ((TextView) row2.findViewById(R.id.rw_crosswind)).setText("XX");
                 ((TextView) row2.findViewById(R.id.rw_headwind)).setText("XX");
                 tl.addView(row2);
 
                 TableRow row3 = (TableRow) LayoutInflater.from(this).inflate(R.layout.rw_table_row, null);
-                ((TextView) row3.findViewById(R.id.rw_id)).setText(rw.id.substring(rw.id.indexOf("/")+1, rw.id.length() ));
+                ((TextView) row3.findViewById(R.id.rw_id)).setText(rw.id.substring(rw.id.indexOf("/") + 1, rw.id.length()));
                 tvLen = (TextView) row3.findViewById(R.id.rw_length);
-                tvLen.setText(""+rw.length);
+                tvLen.setText("" + rw.length);
                 ((TextView) row3.findViewById(R.id.rw_surface)).setText(rw.surface);
                 ((TextView) row3.findViewById(R.id.rw_crosswind)).setText("XX");
                 ((TextView) row3.findViewById(R.id.rw_headwind)).setText("XX");
@@ -818,7 +833,62 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 TableRow row2 = (TableRow) LayoutInflater.from(this).inflate(R.layout.rw_table_row, null);
                 ((TextView) row2.findViewById(R.id.rw_id)).setText(rw.id);
                 ((TextView) row2.findViewById(R.id.rw_surface)).setText(rw.surface);
-                ((TextView) row2.findViewById(R.id.rw_length)).setText(""+rw.length);
+                ((TextView) row2.findViewById(R.id.rw_length)).setText("" + rw.length);
+                ((TextView) row2.findViewById(R.id.rw_crosswind)).setText("XX");
+                ((TextView) row2.findViewById(R.id.rw_headwind)).setText("XX");
+                tl.addView(row2);
+            }
+        }
+        aerodromeView.setVisibility(View.VISIBLE);
+
+    }
+
+
+    public void showAerodromeView(String id) {
+        Aerodrome a = LocalData.aerodromes.get(id);
+        TextView name = (TextView) aerodromeView.findViewById(R.id.adName);
+        name.setText(a.getName());
+
+        TextView elev = (TextView) aerodromeView.findViewById(R.id.adelev);
+        elev.setText("" + a.getElevation() + " ft MSL");
+
+        TableLayout tl = (TableLayout) aerodromeView.findViewById(R.id.rwtable);
+
+        tl.removeAllViews();
+        TableRow row = (TableRow) LayoutInflater.from(this).inflate(R.layout.rw_table_row, null);
+        ((TextView) row.findViewById(R.id.rw_id)).setText("RW");
+        ((TextView) row.findViewById(R.id.rw_length)).setText("Length m");
+        ((TextView) row.findViewById(R.id.rw_crosswind)).setText("Crosswind");
+        ((TextView) row.findViewById(R.id.rw_headwind)).setText("Headwind");
+        tl.addView(row);
+
+        LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        for (Runway rw : a.getRunways()) {
+            // Inflate your row "template" and fill out the fields.
+
+            if (rw.getId().contains("/")) {
+                TableRow row2 = (TableRow) inflater.inflate(R.layout.rw_table_row, null);
+                ((TextView) row2.findViewById(R.id.rw_id)).setText(rw.id.substring(0, rw.id.indexOf("/")));
+                TextView tvLen = (TextView) row2.findViewById(R.id.rw_length);
+                tvLen.setText("" + rw.length);
+                ((TextView) row2.findViewById(R.id.rw_surface)).setText(rw.surface);
+                ((TextView) row2.findViewById(R.id.rw_crosswind)).setText("XX");
+                ((TextView) row2.findViewById(R.id.rw_headwind)).setText("XX");
+                tl.addView(row2);
+
+                TableRow row3 = (TableRow) LayoutInflater.from(this).inflate(R.layout.rw_table_row, null);
+                ((TextView) row3.findViewById(R.id.rw_id)).setText(rw.id.substring(rw.id.indexOf("/") + 1, rw.id.length()));
+                tvLen = (TextView) row3.findViewById(R.id.rw_length);
+                tvLen.setText("" + rw.length);
+                ((TextView) row3.findViewById(R.id.rw_surface)).setText(rw.surface);
+                ((TextView) row3.findViewById(R.id.rw_crosswind)).setText("XX");
+                ((TextView) row3.findViewById(R.id.rw_headwind)).setText("XX");
+                tl.addView(row3);
+            } else {
+                TableRow row2 = (TableRow) LayoutInflater.from(this).inflate(R.layout.rw_table_row, null);
+                ((TextView) row2.findViewById(R.id.rw_id)).setText(rw.id);
+                ((TextView) row2.findViewById(R.id.rw_surface)).setText(rw.surface);
+                ((TextView) row2.findViewById(R.id.rw_length)).setText("" + rw.length);
                 ((TextView) row2.findViewById(R.id.rw_crosswind)).setText("XX");
                 ((TextView) row2.findViewById(R.id.rw_headwind)).setText("XX");
                 tl.addView(row2);
@@ -836,7 +906,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     public boolean onMarkerClick(Marker marker) {
         hideAerodromeView();
 
-        if( LocalData.aerodromes.get(marker.getTitle()) != null) {
+        if (LocalData.aerodromes.get(marker.getTitle()) != null) {
             showAerodromeView(marker.getTitle());
         }
         return false;
@@ -848,4 +918,172 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onMapClick(LatLng latLng) {
         hideAerodromeView();
     }
+
+    public void updateMyLocation(Location location) {
+        System.out.print("location update");
+        this.loc = location;
+        LatLng ll = new LatLng(location.getLatitude(), location.getLongitude());
+        if (myPlaneMarker == null) {
+
+            int height = 50;
+            int width = 50;
+            BitmapDrawable bitmapdraw=(BitmapDrawable)getResources().getDrawable(R.drawable.myplane);
+            Bitmap b=bitmapdraw.getBitmap();
+            Bitmap smallMarker = Bitmap.createScaledBitmap(b, width, height, false);
+
+
+            myPlaneMarker = mMap.addMarker(new MarkerOptions()
+                    .title("My location")
+                    .snippet("Click for details")
+                    .position(ll)
+                    .anchor(0.5f,0.5f)
+                    .flat(true)
+                    .icon(BitmapDescriptorFactory.fromBitmap(smallMarker)));
+        }
+        myPlaneMarker.setPosition(ll);
+
+        if (location.hasBearing()) {
+            System.out.print("bearing " + location.getBearing());
+            myPlaneMarker.setRotation(location.getBearing());
+        } else
+            System.out.print("no bearing");
+
+        if( flightMode) {
+            if( location.hasBearing())
+                ((TextView) flightInfo.findViewById(R.id.heading)).setText( "TH " + (int)location.getBearing());
+            else
+                ((TextView) flightInfo.findViewById(R.id.heading)).setText( "TH N/A");
+            if( location.hasSpeed())
+                ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "GS " + (int)(location.getSpeed() *1.943) + " kt");
+            else
+                ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "GS N/A");
+        }
+
+
+    }
+
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        this.headerMenu = menu;
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+
+
+    private void startFlightMode() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            // Permission to access the location is missing.
+            PermissionUtils.requestPermission(this, LOCATION_PERMISSION_REQUEST_CODE,
+                    Manifest.permission.ACCESS_FINE_LOCATION, true);
+        } else if (mMap != null) {
+            // Access to the location has been granted to the app.
+            startMainServiceIfNotStarted();
+            flightMode = true;
+        }
+
+
+        registerReceiver(mUpdateLocationReceiver,
+                new IntentFilter(Constants.LOCATION_UPDATE_ACTION));
+
+
+        flightInfo.setVisibility(View.VISIBLE);
+
+    }
+
+
+
+    public void startMainServiceIfNotStarted() {
+
+        if (isMyServiceRunning(MainService.class)) {
+            // prepare navi
+            Log.d(TAG, "MainService already running, don't start");
+
+
+        } else {
+            Log.d(TAG, "MainService not running, start!");
+            startService(new Intent(this, MainService.class));
+
+        }
+    }
+
+    private boolean isMyServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        Log.d(TAG, "Menu item: " + item.getItemId());
+        switch (item.getItemId()) {
+            case R.id.flight_mode:
+                startFlightMode();
+
+      /*      case R.id.action_map:
+                if( mainView != MainView.MAP) {
+                    showMainView( MainView.MAP);
+                }
+                getActionBar().setDisplayHomeAsUpEnabled(true);
+
+
+                mapFragment.clickedPeek(null);
+                return_here true;
+            case R.id.settings:
+                showMainView(MainView.AUDIO);
+                return_here true;*/
+            //  case R.id.action_map_search:
+            //      showSearch();
+            //     return true;
+            //    case R.id.action_map_layers:
+            //         clickedStartHelper(null);
+        }
+        return true;
+    }
+
+    private final BroadcastReceiver mUpdateLocationReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    try {
+                        Log.d(TAG, "Location update received");
+
+                        if (LocalData.getGPSLocation() != null) {
+                            updateMyLocation(LocalData.getGPSLocation());
+                        }
+                    }
+                    catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
+            } ;
+
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        Log.d(TAG, "onDestroy");
+        try {
+            stopService(new Intent(this, MainService.class));
+        } catch (Exception e) {
+        }
+        try {
+            unregisterReceiver( mUpdateLocationReceiver);
+        }
+        catch( Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
 }

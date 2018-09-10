@@ -2,6 +2,7 @@ package outbound.ai.outbound;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.loopj.android.http.AsyncHttpClient;
@@ -10,13 +11,14 @@ import com.loopj.android.http.JsonHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import java.util.*;
 
 import cz.msebera.android.httpclient.Header;
 
 public class DownloadAreasHTTPClient {
-
+    private final static String TAG = "OB:DownloadAreasHTTPC";
     Activity activity;
 
     public DownloadAreasHTTPClient( Activity activity) {
@@ -40,97 +42,119 @@ public class DownloadAreasHTTPClient {
         return BASE_URL + relativeUrl;
     }
 
+    public void updateAirspaceData( JSONArray features ) {
+        List<Airspace> airspaceList = new LinkedList<Airspace>();
+        for( int i = 0; i < features.length(); i++) {
 
-    public void getAirspaces()  {
-        System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("airspaces.geojson", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-                System.out.println("HTTPRESPONSE with JSONObject");
-
-                try {
-                    JSONArray features = response.getJSONArray("features");
-                    List<Airspace> airspaceList = new LinkedList<Airspace>();
-
-                    for( int i = 0; i < features.length(); i++) {
-
-                        try {
-                            JSONObject feature  = (JSONObject) features.get(i);
+            try {
+                JSONObject feature  = (JSONObject) features.get(i);
 
 
-                            JSONObject properties  = (JSONObject) feature.get("properties");
+                JSONObject properties  = (JSONObject) feature.get("properties");
 
-                            Airspace a = new Airspace();
-                            a.setName( properties.optString("name"));
-                            a.setCallsign( properties.optString("callsign"));
-                            a.setActivity( properties.optString("activity"));
-                            a.setActivityType( properties.optString("activitytype"));
-                            a.setAirspaceClass(properties.optString("airspaceclass"));
-                            a.setRmk(properties.optString("rmk"));
-                            a.setUpper(properties.optString("upper"));
-                            a.setLower(properties.optString("lower"));
-                            a.setActive(properties.optBoolean("active"));
-                            a.setCenter(new LatLng( Double.parseDouble(properties.optString("lat")), Double.parseDouble(properties.optString("lng"))));
-                            JSONObject geometry  = (JSONObject) feature.get("geometry");
-                            JSONArray coords = geometry.getJSONArray("coordinates").getJSONArray(0);
-                            List<LatLng> cs = new LinkedList<LatLng>();
-                            for( int ii = 0; ii < coords.length(); ii++) {
-                                JSONArray coord = (JSONArray) coords.get(ii);
-                                LatLng ll = new LatLng( coord.getDouble(1), coord.getDouble(0));
-                                cs.add(ll);
-                            }
-                            a.setCoordinates( cs);
-                            airspaceList.add(a);
-                       } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-
-                    }
-
-                 LocalData.airspaces = airspaceList;
-                    // Pull out the first event on the public timeline
-//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
- //                   String tweetText = firstEvent.getString("text");
-  //                  System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-  //                  System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
+                Airspace a = new Airspace();
+                a.setName( properties.optString("name"));
+                a.setCallsign( properties.optString("callsign"));
+                a.setActivity( properties.optString("activity"));
+                a.setActivityType( properties.optString("activitytype"));
+                a.setAirspaceClass(properties.optString("airspaceclass"));
+                a.setRmk(properties.optString("rmk"));
+                a.setUpper(properties.optString("upper"));
+                a.setLower(properties.optString("lower"));
+                a.setActive(properties.optBoolean("active"));
+                a.setCenter(new LatLng( Double.parseDouble(properties.optString("lat")), Double.parseDouble(properties.optString("lng"))));
+                JSONObject geometry  = (JSONObject) feature.get("geometry");
+                JSONArray coords = geometry.getJSONArray("coordinates").getJSONArray(0);
+                List<LatLng> cs = new LinkedList<LatLng>();
+                for( int ii = 0; ii < coords.length(); ii++) {
+                    JSONArray coord = (JSONArray) coords.get(ii);
+                    LatLng ll = new LatLng( coord.getDouble(1), coord.getDouble(0));
+                    cs.add(ll);
                 }
-
-                Intent intent = new Intent();
-                intent.setAction("outbound.ai.outbound.AIRSPACE_UPDATED");
-                activity.sendBroadcast(intent);
-
+                a.setCoordinates( cs);
+                airspaceList.add(a);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
 
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
-                try {
-                    // Pull out the first event on the public timeline
-                    JSONObject firstEvent = (JSONObject)timeline.get(0);
-                    String tweetText = firstEvent.getString("text");
-                    System.out.println("HTTPRESPONSE");
-                        // Do something with the response
-                        System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-         }
-        });
+        }
+        LocalData.airspaces = airspaceList;
+        Intent intent = new Intent();
+        intent.setAction("outbound.ai.outbound.AIRSPACE_UPDATED");
+        activity.sendBroadcast(intent);
     }
 
-    public void getSupplements()  {
-        System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("supplements.geojson", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-                System.out.println("HTTPRESPONSE with JSONObject");
 
-                try {
-                    JSONArray features = response.getJSONArray("features");
+    public void getAirspaces() {
+        Log.i(TAG, "getAirspaces");
+        final String fileName = "airspaces.geojson";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 10) { // update every 10 days
+
+            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return airspace data");
+                    try {
+                        JSONArray features = response.getJSONArray("features");
+                        updateAirspaceData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        } else {
+            Log.i(TAG, "get airspace data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("features");
+                updateAirspaceData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void getSupplements() {
+        Log.i(TAG, "getSupplements");
+        final String fileName = "supplements.geojson";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 2) { // update every 2 day
+
+            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return sup data");
+                    try {
+                        JSONArray features = response.getJSONArray("features");
+                        updateSupplementsData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        } else {
+            Log.i(TAG, "get sup data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("features");
+                updateSupplementsData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+
+    public void updateSupplementsData( JSONArray features)  {
+
                     List<Supplement> airspaceList = new LinkedList<Supplement>();
 
                     for( int i = 0; i < features.length(); i++) {
@@ -167,15 +191,6 @@ public class DownloadAreasHTTPClient {
                     }
 
                     LocalData.supplements = airspaceList;
-                    // Pull out the first event on the public timeline
-//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
-                    //                   String tweetText = firstEvent.getString("text");
-                    //                  System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    //                  System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
 
                 Intent intent = new Intent();
                 intent.setAction("outbound.ai.outbound.SUPPLEMENTS_UPDATED");
@@ -183,32 +198,43 @@ public class DownloadAreasHTTPClient {
 
             }
 
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
-                try {
-                    // Pull out the first event on the public timeline
-                    JSONObject firstEvent = (JSONObject)timeline.get(0);
-                    String tweetText = firstEvent.getString("text");
-                    System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
+
+    public void getReservations() {
+        Log.i(TAG, "getReservations");
+        final String fileName = "reservations.geojson";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 2) { // update every 2 day
+
+            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return sup data");
+                    try {
+                        JSONArray features = response.getJSONArray("features");
+                        updateReservationsData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
+            });
+        } else {
+            Log.i(TAG, "get reservations data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("features");
+                updateReservationsData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        });
+        }
     }
 
-    public void getReservations()  {
-        System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("reservations.geojson", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-                System.out.println("HTTPRESPONSE with JSONObject");
 
-                try {
-                    JSONArray features = response.getJSONArray("features");
+    public void updateReservationsData( JSONArray features)  {
+
                     List<Reservation> airspaceList = new LinkedList<Reservation>();
 
                     for( int i = 0; i < features.length(); i++) {
@@ -243,15 +269,7 @@ public class DownloadAreasHTTPClient {
                     }
 
                     LocalData.reservations = airspaceList;
-                    // Pull out the first event on the public timeline
-//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
-                    //                   String tweetText = firstEvent.getString("text");
-                    //                  System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    //                  System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+
 
                 Intent intent = new Intent();
                 intent.setAction("outbound.ai.outbound.RESERVATIONS_UPDATED");
@@ -259,21 +277,7 @@ public class DownloadAreasHTTPClient {
 
             }
 
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
-                try {
-                    // Pull out the first event on the public timeline
-                    JSONObject firstEvent = (JSONObject)timeline.get(0);
-                    String tweetText = firstEvent.getString("text");
-                    System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-    }
+
 
     public void getAerodromes()  {
         System.out.println("HTTPREQUEST");
@@ -432,14 +436,14 @@ public class DownloadAreasHTTPClient {
                             }
                             a.setRunways(rs);
 
+                            LocalData.airports.put(a.code,a);
 
-                            airspaceList.add(a);
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
                     }
 
-                    LocalData.airports = airspaceList;
+
                     // Pull out the first event on the public timeline
 //                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
                     //                   String tweetText = firstEvent.getString("text");
