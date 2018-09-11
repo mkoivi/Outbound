@@ -279,17 +279,42 @@ public class DownloadAreasHTTPClient {
 
 
 
-    public void getAerodromes()  {
-        System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("aerodromes.geojson", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-                System.out.println("HTTPRESPONSE with JSONObject");
+    public void getAerodromes() {
+        Log.i(TAG, "getAerodromes");
+        final String fileName = "aerodromes.geojson";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
 
-                try {
-                    JSONArray features = response.getJSONArray("features");
-                    ;
+            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return add data");
+                    try {
+                        JSONArray features = response.getJSONArray("features");
+                        updateAerodromesData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        } else {
+            Log.i(TAG, "get add data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("features");
+                updateAerodromesData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    public void updateAerodromesData( JSONArray features)  {
+        System.out.println("updateAerodromesData");
 
                     for( int i = 0; i < features.length(); i++) {
 
@@ -339,54 +364,49 @@ public class DownloadAreasHTTPClient {
                             e.printStackTrace();
                         }
                     }
-
-
-                    // Pull out the first event on the public timeline
-//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
-                    //                   String tweetText = firstEvent.getString("text");
-                    //                  System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    //                  System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                Intent intent = new Intent();
+                  Intent intent = new Intent();
                 intent.setAction("outbound.ai.outbound.AERODROMES_UPDATED");
                 activity.sendBroadcast(intent);
 
-            }
-
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
-                try {
-                    // Pull out the first event on the public timeline
-                    JSONObject firstEvent = (JSONObject)timeline.get(0);
-                    String tweetText = firstEvent.getString("text");
-                    System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
     }
 
 
+    public void getAirports() {
+        Log.i(TAG, "getAirports");
+        final String fileName = "airfields.geojson";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
+
+            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return add data");
+                    try {
+                        JSONArray features = response.getJSONArray("features");
+                        updateAirportData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        } else {
+            Log.i(TAG, "get add data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("features");
+                updateAirportData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
 
-    public void getAirports()  {
-        System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("airfields.geojson", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-                System.out.println("HTTPRESPONSE with JSONObject");
+    public void updateAirportData( JSONArray features)  {
 
-                try {
-                    JSONArray features = response.getJSONArray("features");
-                    List<Airport> airspaceList = new LinkedList<Airport>();
 
                     for( int i = 0; i < features.length(); i++) {
 
@@ -444,15 +464,6 @@ public class DownloadAreasHTTPClient {
                     }
 
 
-                    // Pull out the first event on the public timeline
-//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
-                    //                   String tweetText = firstEvent.getString("text");
-                    //                  System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    //                  System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
 
                 Intent intent = new Intent();
                 intent.setAction("outbound.ai.outbound.AIRPORTS_UPDATED");
@@ -460,32 +471,44 @@ public class DownloadAreasHTTPClient {
 
             }
 
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
-                try {
-                    // Pull out the first event on the public timeline
-                    JSONObject firstEvent = (JSONObject)timeline.get(0);
-                    String tweetText = firstEvent.getString("text");
-                    System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
+
+    public void getWaypoints() {
+        Log.i(TAG, "getWaypoints");
+        final String fileName = "waypoints.geojson";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
+
+            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return add data");
+                    try {
+                        JSONArray features = response.getJSONArray("features");
+                        updateWaypointsData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
+            });
+        } else {
+            Log.i(TAG, "get wp data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("features");
+                updateWaypointsData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        });
+        }
     }
 
-    public void getWaypoints()  {
-        System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("waypoints.geojson", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-                System.out.println("HTTPRESPONSE with JSONObject");
 
-                try {
-                    JSONArray features = response.getJSONArray("features");
+
+    public void updateWaypointsData( JSONArray features)  {
+
                     List<Waypoint> airspaceList = new LinkedList<Waypoint>();
 
                     for( int i = 0; i < features.length(); i++) {
@@ -521,49 +544,52 @@ public class DownloadAreasHTTPClient {
                     }
 
                     LocalData.waypoints = airspaceList;
-                    // Pull out the first event on the public timeline
-//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
-                    //                   String tweetText = firstEvent.getString("text");
-                    //                  System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    //                  System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+
 
                 Intent intent = new Intent();
                 intent.setAction("outbound.ai.outbound.WAYPOINTS_UPDATED");
                 activity.sendBroadcast(intent);
 
-            }
 
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
-                try {
-                    // Pull out the first event on the public timeline
-                    JSONObject firstEvent = (JSONObject)timeline.get(0);
-                    String tweetText = firstEvent.getString("text");
-                    System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
     }
 
 
-    public void getObstacles()  {
-        System.out.println("HTTPREQUEST");
-        DownloadAreasHTTPClient.get("obstacles.geojson", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                // If the response is JSONObject instead of expected JSONArray
-                System.out.println("HTTPRESPONSE with JSONObject");
+    public void getObstacles() {
+        Log.i(TAG, "getObstacles");
+        final String fileName = "obstacles.geojson";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
 
-                try {
-                    JSONArray features = response.getJSONArray("features");
+            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return add data");
+                    try {
+                        JSONArray features = response.getJSONArray("features");
+                        updateObstaclesData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        } else {
+            Log.i(TAG, "get obs data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("features");
+                updateObstaclesData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    public void updateObstaclesData(JSONArray features)  {
+
                     List<Obstacle> airspaceList = new LinkedList<>();
 
                     for( int i = 0; i < features.length(); i++) {
@@ -600,15 +626,6 @@ public class DownloadAreasHTTPClient {
                     }
 
                     LocalData.obstacles = airspaceList;
-                    // Pull out the first event on the public timeline
-//                    JSONObject firstEvent = (JSONObject)response.getJSONObject("features");
-                    //                   String tweetText = firstEvent.getString("text");
-                    //                  System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    //                  System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
 
                 Intent intent = new Intent();
                 intent.setAction("outbound.ai.outbound.OBSTACLES_UPDATED");
@@ -616,24 +633,41 @@ public class DownloadAreasHTTPClient {
 
             }
 
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray timeline) {
-                try {
-                    // Pull out the first event on the public timeline
-                    JSONObject firstEvent = (JSONObject)timeline.get(0);
-                    String tweetText = firstEvent.getString("text");
-                    System.out.println("HTTPRESPONSE");
-                    // Do something with the response
-                    System.out.println(tweetText);
-                } catch (Exception e) {
-                    e.printStackTrace();
+
+    public void getWeather() {
+        Log.i(TAG, "getWeather");
+        final String url = "https://www.ilmailusaa.fi/backend.php?{%22mode%22:%22metartaf%22,%22radius%22:%22100%22,%22points%22:[{%22_lon%22:19.955322357127883,%22_lat%22:63.38045595056234},{%22_lon%22:20.48682808808789,%22_lat%22:59.53117760188318},{%22_lon%22:31.18856857414081,%22_lat%22:59.9210561813142},{%22_lon%22:31.96529049581418,%22_lat%22:68.22053794882052},{%22_lon%22:27.237080462936532,%22_lat%22:70.57196471992248},{%22_lon%22:22.203804656099354,%22_lat%22:69.44091169818802},{%22_lon%22:19.780870994518416,%22_lat%22:69.46770635226937},{%22_lon%22:19.973237996864583,%22_lat%22:63.30748777534764}]}";
+        final String fileName = "metar.json";
+        long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
+        if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
+
+
+                DownloadAreasHTTPClient.get(url, null, new JsonHttpResponseHandler() {
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                    System.out.println("return metar data");
+                    try {
+                        JSONArray features = response.getJSONArray("METAR0");
+                        updateObstaclesData(features);
+                        LocalData.getInstance(activity).storeStringData(fileName, response.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
+            });
+        } else {
+            Log.i(TAG, "get obs data from cache");
+
+            String data = LocalData.getInstance(activity).loadStringData(fileName);
+
+            try {
+                JSONArray features = new JSONObject(data).getJSONArray("METAR0");
+                updateObstaclesData(features);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        });
+        }
     }
-
-
-
 
 
 }

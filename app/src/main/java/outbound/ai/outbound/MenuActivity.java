@@ -180,6 +180,18 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
        new Thread(new Runnable() {
                 public void run() {
 
+                    IntentFilter filter8 = new IntentFilter("outbound.ai.outbound.METAR_UPDATED");
+                    BroadcastReceiver receiver8 = new BroadcastReceiver() {
+                        @Override
+                        public void onReceive(Context context, Intent intent) {
+                            System.out.println("Received metar data");
+                          //  updateObstacles();
+
+                        }
+                    };
+                    registerReceiver(receiver8, filter8);
+
+
                 IntentFilter filter = new IntentFilter("outbound.ai.outbound.AIRSPACE_UPDATED");
                 BroadcastReceiver receiver = new BroadcastReceiver() {
                     @Override
@@ -267,10 +279,13 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received reservations data");
                         updateObstacles();
+                        httpClient.getWeather();
 
                     }
                 };
                 registerReceiver(receiver7, filter7);
+
+
 
 
        //         Toast.makeText(MenuActivity.this, "Loading airspace segments",
