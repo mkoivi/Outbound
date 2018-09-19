@@ -28,6 +28,7 @@ public class LocalData {
     // Singleton instance
     private static LocalData sInstance;
 
+
     public LocalData( Context ctx) {
         this.mContext = ctx;
     }
@@ -62,6 +63,10 @@ public class LocalData {
 
     public static List<Obstacle> obstacles = new LinkedList<>();
     public static long obstaclesUpdated = 0;
+
+
+    public static HashMap<String,Metar> metars = new HashMap<>();
+    public static HashMap<String, Metar> awsmetars = new HashMap<>();
 
     public static Location gpsLocation;
 

@@ -1,4 +1,4 @@
-package outbound.ai.outbound;
+package outbound.ai.outbound.datasources;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -11,17 +11,25 @@ import com.loopj.android.http.JsonHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 import java.util.*;
 
 import cz.msebera.android.httpclient.Header;
+import outbound.ai.outbound.Aerodrome;
+import outbound.ai.outbound.Airport;
+import outbound.ai.outbound.Airspace;
+import outbound.ai.outbound.LocalData;
+import outbound.ai.outbound.Obstacle;
+import outbound.ai.outbound.Reservation;
+import outbound.ai.outbound.Runway;
+import outbound.ai.outbound.Supplement;
+import outbound.ai.outbound.Waypoint;
 
-public class DownloadAreasHTTPClient {
+public class AISDataClient {
     private final static String TAG = "OB:DownloadAreasHTTPC";
     Activity activity;
 
-    public DownloadAreasHTTPClient( Activity activity) {
+    public AISDataClient(Activity activity) {
         this.activity = activity;
     }
 
@@ -91,7 +99,7 @@ public class DownloadAreasHTTPClient {
         long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 10) { // update every 10 days
 
-            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+            AISDataClient.get(fileName, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return airspace data");
@@ -124,7 +132,7 @@ public class DownloadAreasHTTPClient {
         long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 2) { // update every 2 day
 
-            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+            AISDataClient.get(fileName, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return sup data");
@@ -205,7 +213,7 @@ public class DownloadAreasHTTPClient {
         long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 2) { // update every 2 day
 
-            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+            AISDataClient.get(fileName, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return sup data");
@@ -285,7 +293,7 @@ public class DownloadAreasHTTPClient {
         long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
 
-            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+            AISDataClient.get(fileName, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return add data");
@@ -377,7 +385,7 @@ public class DownloadAreasHTTPClient {
         long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
 
-            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+            AISDataClient.get(fileName, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return add data");
@@ -456,7 +464,7 @@ public class DownloadAreasHTTPClient {
                             }
                             a.setRunways(rs);
 
-                            LocalData.airports.put(a.code,a);
+                            LocalData.airports.put(a.getCode(),a);
 
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -478,7 +486,7 @@ public class DownloadAreasHTTPClient {
         long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
 
-            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+            AISDataClient.get(fileName, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return add data");
@@ -560,7 +568,7 @@ public class DownloadAreasHTTPClient {
         long storedFileAge = LocalData.getInstance(activity).getFileAge(fileName);
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
 
-            DownloadAreasHTTPClient.get(fileName, null, new JsonHttpResponseHandler() {
+            AISDataClient.get(fileName, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return add data");
@@ -642,7 +650,7 @@ public class DownloadAreasHTTPClient {
         if ( storedFileAge == -1 || storedFileAge > 1000 * 60 * 60 * 24 * 5) { // update every 2 day
 
 
-                DownloadAreasHTTPClient.get(url, null, new JsonHttpResponseHandler() {
+                AISDataClient.get(url, null, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                     System.out.println("return metar data");
