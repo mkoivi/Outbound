@@ -7,18 +7,69 @@
     android:background="#64ffffff"
     android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/heading"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:text="TH N/A"
-        />
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_weight="1">
 
-    <TextView
-        android:id="@+id/groundspeed"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:text="GS N/A" />
+        <TextView
+            android:id="@+id/textView"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_alignParentStart="true"
+            android:layout_alignParentTop="true"
+            android:layout_centerVertical="false"
+            android:gravity="center_vertical"
+            android:paddingRight="3dp"
+            android:text="TH"
+            android:textAlignment="center" />
+
+        <TextView
+            android:id="@+id/textView3"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_alignParentTop="true"
+            android:layout_toEndOf="@+id/groundspeed"
+            android:gravity="center_vertical"
+            android:text="kts"
+            android:textAlignment="center" />
+
+        <TextView
+            android:id="@+id/heading"
+            android:layout_width="35dp"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:layout_toEndOf="@+id/textView"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif"
+            android:text="260"
+            android:textAppearance="@style/TextAppearance.AppCompat"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textView2"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_alignParentTop="true"
+            android:layout_toEndOf="@+id/heading"
+            android:gravity="center_vertical"
+            android:paddingLeft="15dp"
+            android:paddingRight="3dp"
+            android:text="GS"
+            android:textAlignment="center" />
+
+        <TextView
+            android:id="@+id/groundspeed"
+            android:layout_width="35dp"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@+id/textView2"
+            android:layout_weight="1"
+            android:text="102"
+            android:textAppearance="@style/TextAppearance.AppCompat"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+
 </LinearLayout>

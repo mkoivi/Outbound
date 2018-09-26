@@ -4,7 +4,7 @@ android {
     compileSdkVersion 27
     defaultConfig {
         applicationId "outbound.ai.outbound"
-        minSdkVersion 22
+        minSdkVersion 25
         targetSdkVersion 27
         versionCode 1
         versionName "1.0"
@@ -29,4 +29,5 @@ dependencies {
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
     implementation 'com.loopj.android:android-async-http:1.4.9'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.5.3'
+    implementation 'com.amazonaws:aws-android-sdk-mobile-client:2.7.+@aar'
 }

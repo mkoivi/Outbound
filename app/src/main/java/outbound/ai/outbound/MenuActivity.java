@@ -14,6 +14,8 @@ import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.constraint.ConstraintLayout;
 import android.support.design.widget.BottomNavigationView;
@@ -33,6 +35,9 @@ import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
 
+
+import com.amazonaws.mobile.client.AWSMobileClient;
+
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.GoogleMapOptions;
@@ -46,6 +51,7 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 
+import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -102,13 +108,13 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         public boolean onNavigationItemSelected(@NonNull MenuItem item) {
             switch (item.getItemId()) {
                 case R.id.navigation_home:
-                    mTextMessage.setText(R.string.title_home);
+    //                mTextMessage.setText(R.string.title_home);
                     return true;
                 case R.id.navigation_dashboard:
-                    mTextMessage.setText(R.string.title_dashboard);
+  //                  mTextMessage.setText(R.string.title_dashboard);
                     return true;
                 case R.id.navigation_notifications:
-                    mTextMessage.setText(R.string.title_notifications);
+//                    mTextMessage.setText(R.string.title_notifications);
                     return true;
             }
             return false;
@@ -129,7 +135,6 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         flightInfo.setVisibility(View.GONE);
 
 
-        mTextMessage = (TextView) findViewById(R.id.message);
         BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
         navigation.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
 
@@ -137,6 +142,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
 
 
     }
@@ -184,32 +190,33 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void setupData() {
-       new Thread(new Runnable() {
-                public void run() {
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
 
-                    IntentFilter filter8 = new IntentFilter("outbound.ai.outbound.METAR_UPDATED");
-                    BroadcastReceiver receiver8 = new BroadcastReceiver() {
-                        @Override
-                        public void onReceive(Context context, Intent intent) {
-                            System.out.println("Received metar data");
-                            updateWeather();
-                            awsMetarClient.getWeather();
+                IntentFilter filter8 = new IntentFilter("outbound.ai.outbound.METAR_UPDATED");
+                BroadcastReceiver receiver8 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received metar data");
+                        updateWeather();
+                        awsMetarClient.getWeather();
 
 
-                        }
-                    };
-                    registerReceiver(receiver8, filter8);
+                    }
+                };
+                registerReceiver(receiver8, filter8);
 
-                    IntentFilter filter9 = new IntentFilter("outbound.ai.outbound.AWS_METAR_UPDATED");
-                    BroadcastReceiver receiver9 = new BroadcastReceiver() {
-                        @Override
-                        public void onReceive(Context context, Intent intent) {
-                            System.out.println("Received AWS metar data");
+                IntentFilter filter9 = new IntentFilter("outbound.ai.outbound.AWS_METAR_UPDATED");
+                BroadcastReceiver receiver9 = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        System.out.println("Received AWS metar data");
 //                            updateWeather()
 
-                        }
-                    };
-                    registerReceiver(receiver9, filter9);
+                    }
+                };
+                registerReceiver(receiver9, filter9);
 
 
                 IntentFilter filter = new IntentFilter("outbound.ai.outbound.AIRSPACE_UPDATED");
@@ -218,8 +225,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received airpace data");
                         updateAirspace();
-        //                Toast.makeText(MenuActivity.this, "Loading supplements",
-        //                        Toast.LENGTH_SHORT).show();
+                        //                Toast.makeText(MenuActivity.this, "Loading supplements",
+                        //                        Toast.LENGTH_SHORT).show();
                         aisDataClient.getSupplements();
                         metarClient.getWeather();
                     }
@@ -233,8 +240,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                         System.out.println("Received supplements data");
                         updateSupplements();
                         aisDataClient.getAerodromes();
-         //               Toast.makeText(MenuActivity.this, "Loading aerodromes",
-         //                       Toast.LENGTH_SHORT).show();
+                        //               Toast.makeText(MenuActivity.this, "Loading aerodromes",
+                        //                       Toast.LENGTH_SHORT).show();
                     }
                 };
                 registerReceiver(receiver2, filter2);
@@ -245,8 +252,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received aerodromes data");
                         updateAerodromes();
-      //                  Toast.makeText(MenuActivity.this, "Loading airports",
-      //                          Toast.LENGTH_SHORT).show();
+                        //                  Toast.makeText(MenuActivity.this, "Loading airports",
+                        //                          Toast.LENGTH_SHORT).show();
                         aisDataClient.getAirports();
                     }
                 };
@@ -258,8 +265,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received airports data");
                         updateAirports();
-       //                 Toast.makeText(MenuActivity.this, "Loading reservations",
-       //                         Toast.LENGTH_SHORT).show();
+                        //                 Toast.makeText(MenuActivity.this, "Loading reservations",
+                        //                         Toast.LENGTH_SHORT).show();
                         aisDataClient.getReservations();
 
                     }
@@ -273,7 +280,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                         System.out.println("Received reservations data");
                         updateReservations();
                         //                     Toast.makeText(MenuActivity.this, "Loading waypoints",
-   //                             Toast.LENGTH_SHORT).show();
+                        //                             Toast.LENGTH_SHORT).show();
                         aisDataClient.getWaypoints();
                     }
                 };
@@ -285,8 +292,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received reservations data");
                         updateWaypoints();
-      //                  Toast.makeText(MenuActivity.this, "Loading obstacles",
-      //                          Toast.LENGTH_SHORT).show();
+                        //                  Toast.makeText(MenuActivity.this, "Loading obstacles",
+                        //                          Toast.LENGTH_SHORT).show();
 
                         aisDataClient.getObstacles();
 
@@ -306,17 +313,13 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 registerReceiver(receiver7, filter7);
 
 
-
-
-       //         Toast.makeText(MenuActivity.this, "Loading airspace segments",
-         //               Toast.LENGTH_SHORT).show();
+                //         Toast.makeText(MenuActivity.this, "Loading airspace segments",
+                //               Toast.LENGTH_SHORT).show();
                 aisDataClient.getAirspaces();
 
 
-
-
-                }
-            }).start();
+            }
+        });
 
 
     }
@@ -498,7 +501,11 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     int rotation = 0;
                     rotation = Integer.parseInt(r.getNames().get(0).substring(0, 2) + "0") + 7;
                     if( metar != null) {
-                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), true, metar.getMeanWindDirection(), metar.getMeanWindSpeed(), metar.getVisibility(), metar.getCloudBase()));
+                        int windSpeed = metar.getMeanWindSpeed();
+                        if( metar.getGustWindSpeed() > 0 ) {
+                            windSpeed = metar.getGustWindSpeed();
+                        }
+                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), true, metar.getMeanWindDirection(), windSpeed, metar.getVisibility(), metar.getCloudBase()));
                     }
                     else {
                         aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), false, 0, 0, 0, 0));
@@ -664,16 +671,16 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
             ImageView clo = marker.findViewById(R.id.clouds);
-            if (cloudBase >= 5000 ) clo.setColorFilter(Color.WHITE);
-            if (visibility < 5000 )
+            if (cloudBase >= 50 ) clo.setColorFilter(Color.WHITE);
+            if (cloudBase < 50 )
                 clo.setColorFilter(Color.argb(255, 0, 255, 255));
-            if (cloudBase < 2000)
+            if (cloudBase < 20)
                 clo.setColorFilter(Color.GREEN);
-            if (cloudBase < 1500)
+            if (cloudBase < 15)
                 clo.setColorFilter(Color.YELLOW);
-            if (cloudBase < 1000)
+            if (cloudBase < 10)
                 clo.setColorFilter(Color.argb(255, 255, 100, 0));
-            if (cloudBase < 500)
+            if (cloudBase < 5)
                 clo.setColorFilter(Color.RED);
             if (cloudBase == -1)
                 clo.setColorFilter(Color.GRAY);
@@ -1080,14 +1087,17 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             System.out.print("no bearing");
 
         if( flightMode) {
-            if( location.hasBearing())
-                ((TextView) flightInfo.findViewById(R.id.heading)).setText( "TH " + (int)location.getBearing());
+            if( location.hasBearing()) {
+                DecimalFormat formatter = new DecimalFormat("000");
+                String aFormatted = formatter.format((int) location.getBearing());
+                ((TextView) flightInfo.findViewById(R.id.heading)).setText(aFormatted );
+            }
             else
-                ((TextView) flightInfo.findViewById(R.id.heading)).setText( "TH N/A");
+                ((TextView) flightInfo.findViewById(R.id.heading)).setText( "N/A");
             if( location.hasSpeed())
-                ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "GS " + (int)(location.getSpeed() *1.943) + " kt");
+                ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "" + (int)(location.getSpeed() *1.943) );
             else
-                ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "GS N/A");
+                ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "N/A");
         }
 
 

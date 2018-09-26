@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.StringTokenizer;
 
 import cz.msebera.android.httpclient.Header;
+import cz.msebera.android.httpclient.ParseException;
 import outbound.ai.outbound.Aerodrome;
 import outbound.ai.outbound.Airport;
 import outbound.ai.outbound.Airspace;
@@ -101,38 +102,62 @@ public class AWSMetarClient {
                                 m.setMessage(obj.getString("p1"));
                                 String msg = obj.getString("p1");
                                 StringTokenizer st = new StringTokenizer(msg, " ");
+
+                                // station ILHF
                                 m.setStation(st.nextToken());
+
+                                // time, 260740Z
                                 String time = st.nextToken();
                                 m.setTime(time.substring(2, 4) + time.substring(4, 6));
-                                st.nextToken(); // AUTO
-                                String wind = st.nextToken();
-                                if (!wind.contains("/")) {
-                                    if (!wind.contains("VRB"))
-                                        m.setMeanWindDirection(Integer.parseInt(wind.substring(0, 3)));
-                                    m.setMeanWindSpeed(Integer.parseInt(wind.substring(3, 5)));
-                                    if (wind.contains("G")) {
-                                        m.setGustWindSpeed(Integer.parseInt(wind.substring(6, 8)));
-                                    }
-                                }
 
-                                String vis = st.nextToken();
-                                if (vis.equals("CAVOK"))
-                                    m.setCavok(true);
-                                else if (!vis.contains("/"))
-                                    m.setVisibility(Integer.parseInt(vis));
                                 while (st.hasMoreTokens()) {
                                     String next = st.nextToken();
+
+                                    if( next.equals("AUTO"))
+                                        continue;
+                                    if( next.equals("NIL"))
+                                        break;
+                                    if( next.equals("RMK"))
+                                        continue;
+                                    if( next.contains("////"))
+                                        continue;
+
+                                    // wind
+                                    if (next.contains("KT")) {
+                                        if (!next.contains("VRB"))
+                                            m.setMeanWindDirection(Integer.parseInt(next.substring(0, 3)));
+                                        m.setMeanWindSpeed(Integer.parseInt(next.substring(3, 5)));
+                                        if (next.contains("G")) {
+                                            m.setGustWindSpeed(Integer.parseInt(next.substring(6, 8)));
+                                        }
+                                    }
+                                    if (next.equals("CAVOK"))
+                                        m.setCavok(true);
+
+                                    // visibility: this is a number=parse integer works
+                                    try {
+                                        m.setVisibility( Integer.parseInt(next));
+                                    }
+                                    catch (NumberFormatException e) {
+                                    }
+
                                     if (next.contains("FEW") || next.contains("SCT") || next.contains("BKN") || next.contains("OVC")) {
                                         CloudLayer mc = new CloudLayer();
                                         mc.layerType = next.substring(0, 3);
                                         mc.baseHeight = Integer.parseInt(next.substring(3));
+                                        m.getClouds().add(mc);
+                                    } else if (next.startsWith("VV")) {
+                                        CloudLayer mc = new CloudLayer();
+                                        mc.layerType = "VV";
+                                        mc.baseHeight = Integer.parseInt(next.substring(2));
                                         m.getClouds().add(mc);
                                     } else if (next.startsWith("Q") && !next.contains("/")) {
                                         String qnh = next;
                                         qnh = qnh.replace("Q", "");
                                         qnh = qnh.replace("=", "");
                                         m.setQnh(Integer.parseInt(qnh));
-                                    } else if (next.length() == 5 && next.contains("/")) {
+                                    }
+                                    else if (next.replaceAll("M","").length() == 5 && next.replaceAll("M","").lastIndexOf("/")== 2) {
                                         String temp = next.substring(0, next.indexOf("/"));
                                         temp = temp.replace("M", "-");
                                         m.setTemp(Integer.parseInt(temp));

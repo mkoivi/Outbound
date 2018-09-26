@@ -1,6 +1,7 @@
 package outbound.ai.outbound.metar;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Stack;
 import java.util.StringTokenizer;
 
@@ -8,10 +9,22 @@ import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import outbound.ai.outbound.CloudLayer;
 import outbound.ai.outbound.Metar;
 
 public class MetarParserHandler  extends DefaultHandler{
 
+		public static HashMap<String, String> cloudLayerCodes = new HashMap<>();
+
+
+	{
+		cloudLayerCodes.put("http://codes.wmo.int/bufr4/codeflag/0-20-008/0", "CLR");
+		cloudLayerCodes.put("http://codes.wmo.int/bufr4/codeflag/0-20-008/1", "FEW");
+		cloudLayerCodes.put("http://codes.wmo.int/bufr4/codeflag/0-20-008/2", "SCT");
+		cloudLayerCodes.put("http://codes.wmo.int/bufr4/codeflag/0-20-008/3", "BKN");
+		cloudLayerCodes.put("http://codes.wmo.int/bufr4/codeflag/0-20-008/4", "OVC");
+
+		}
 	    //This is the list which shall be populated while parsing the XML.
 	    private ArrayList<Metar> metarList = new ArrayList<Metar>();
 	 
@@ -20,7 +33,10 @@ public class MetarParserHandler  extends DefaultHandler{
 	 
 	    //As we complete one user block in XML, we will push the User instance in userList
 	    private Stack objectStack = new Stack();
-	 
+
+	    CloudLayer cl;
+	    String cloudLayerUnit = null;
+		private String windSpeedUnit = null;
 	    Metar metar = null;
 	    
 	    public void startDocument() throws SAXException
@@ -57,17 +73,33 @@ public class MetarParserHandler  extends DefaultHandler{
 				}
 	    	 }
 
-			if ("iwxxm:CloudLayer".equals(qName))   {
+			if ("iwxxm:CloudLayer".equals(qName)) {
+				cl = new CloudLayer();
+
+			}
+
+			if ("iwxxm:meanWindSpeed".equals(qName)) {
+				windSpeedUnit = attrs.getValue("uom");
+
+			}
+
+
+
+
+
+			if ( cl != null && "iwxxm:amount".equals(qName))   {
 				try {
-				String weatherTypeUri = attrs.getValue("xlink:href");
-				String weatherCode = weatherTypeUri.substring(weatherTypeUri.lastIndexOf("/")+1,weatherTypeUri.length());
-				metar.setPresentWeather(new String(weatherCode));
+				String cloudLayerUri = attrs.getValue("xlink:href");
+				cl.layerType = cloudLayerCodes.get(cloudLayerUri);
+
 				}
 				catch( Exception e) {
 					System.err.println( "can't parse " + qName + ", attrs " + attrs );
 				}
 			}
-
+			if ( cl != null && "iwxxm:base".equals(qName)) {
+				cloudLayerUnit = attrs.getValue("uom");
+	        }
 	        //Set all required attributes in any XML element here itself
 	         /*   if(attributes != null && attributes.getLength() == 1)
 	            {
@@ -87,10 +119,30 @@ public class MetarParserHandler  extends DefaultHandler{
 	        //User instance has been constructed so pop it from object stack and push in userList
 	        if ("wfs:member".equals(qName))
 	        {
-	            this.metarList.add(metar);
+	   			if( windSpeedUnit != null && windSpeedUnit.equals("m/s")) {
+	   				metar.setMeanWindSpeed(Math.round(metar.getMeanWindSpeed()*1.9f));
+					if( metar.getGustWindSpeed() > 0) {
+						metar.setGustWindSpeed(Math.round(metar.getGustWindSpeed()*1.9f));
+					}
+
+				}
+
+	                  this.metarList.add(metar);
 	            metar = null;
 	        }
-	        
+			if ("iwxxm:CloudLayer".equals(qName))   {
+				if(cl != null && cl.layerType != null && cl.baseHeight > 0) {
+					if( cloudLayerUnit != null && cloudLayerUnit.equals("m")) {
+						cl.baseHeight = Math.round( (float)cl.baseHeight / 30.48f );
+						cloudLayerUnit = null;
+					}
+					metar.getClouds().add(cl);
+				}
+				else {
+					System.err.println( "Could not parse CloudLayer");
+				}
+	        	cl = null;
+			}
 	//    	String elem = currentElement();
 	    	
 //	    	if( elem.equals("avi:input")) {
@@ -168,8 +220,10 @@ public class MetarParserHandler  extends DefaultHandler{
 	    	 if ("avi:input".equals(elem))   {
 	    		 metar.setMessage(new String(ch, start, length));
 	    	 }
-	    	 
 
+			if ( cl != null && "iwxxm:base".equals(elem))   {
+					cl.baseHeight = (int)Float.parseFloat(new String(ch, start, length));
+			}
 	    	 
 	  /*      	String message = new String(ch, start, length);
 	        	StringTokenizer st = new StringTokenizer( message, " ");
