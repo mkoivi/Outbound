@@ -82,6 +82,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     List<Marker> aerodromeMarkers = new LinkedList<Marker>();
     List<Marker> waypointMarkers = new LinkedList<>();
     List<Marker> obstacleMarkers = new LinkedList<>();
+    List<Marker> awsMarkers = new LinkedList<>();
+
 
     List<BroadcastReceiver> receivers = new LinkedList<>();
 
@@ -122,7 +124,6 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     };
 
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -130,6 +131,10 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         aerodromeView = (ConstraintLayout) findViewById(R.id.aerodrome);
         aerodromeView.setVisibility(View.GONE);
+
+
+   //     infoLayout = (ConstraintLayout) findViewById(R.id.in);
+   //     infoLayout.setVisibility(View.GONE);
 
         flightInfo = (LinearLayout) findViewById(R.id.flight_info);
         flightInfo.setVisibility(View.GONE);
@@ -199,7 +204,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     @Override
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received metar data");
-                        updateWeather();
+
                         awsMetarClient.getWeather();
 
 
@@ -213,7 +218,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received AWS metar data");
 //                            updateWeather()
-
+                        updateWeather();
                     }
                 };
                 registerReceiver(receiver9, filter9);
@@ -290,7 +295,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 BroadcastReceiver receiver6 = new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received reservations data");
+                        System.out.println("Received waypoints data");
                         updateWaypoints();
                         //                  Toast.makeText(MenuActivity.this, "Loading obstacles",
                         //                          Toast.LENGTH_SHORT).show();
@@ -305,7 +310,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 BroadcastReceiver receiver7 = new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received reservations data");
+                        System.out.println("Received obstacles data");
                         updateObstacles();
 
                     }
@@ -505,10 +510,10 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                         if( metar.getGustWindSpeed() > 0 ) {
                             windSpeed = metar.getGustWindSpeed();
                         }
-                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), true, metar.getMeanWindDirection(), windSpeed, metar.getVisibility(), metar.getCloudBase()));
+                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), true, metar.getMeanWindDirection(), windSpeed, metar.getVisibility(), metar.getCloudBase(), metar.getQnh(), metar.isCb()));
                     }
                     else {
-                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), false, 0, 0, 0, 0));
+                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), false, 0, 0, 0, 0,0, false));
 
                    }
                 } catch (Exception e) {
@@ -534,7 +539,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 try {
                     int rotation = 0;
                     rotation = Integer.parseInt(r.id.substring(0, 2) + "0") + 7;
-                    aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), false, 0, 0, 0, 0));
+                    aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), false, 0, 0, 0, 0,0, false));
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -568,6 +573,19 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void updateWeather() {
 
+        for (Marker m : awsMarkers) {
+            m.remove();
+        }
+        awsMarkers.clear();
+
+        for( Metar metar: LocalData.awsmetars.values()) {
+
+            int windSpeed = metar.getMeanWindSpeed();
+            if( metar.getGustWindSpeed() > 0 ) {
+                windSpeed = metar.getGustWindSpeed();
+            }
+            awsMarkers.add(addAWSMarker(metar.getLocation(), metar.getStation(), metar.getMeanWindDirection(), windSpeed, metar.getVisibility(), metar.getCloudBase(), metar.getQnh(), metar.getMessage(), metar.isCb()));
+        }
     }
 
     @Override
@@ -626,7 +644,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         return customMarker;
     }
 
-    public Marker addAerodromeMarker(LatLng pos, String title, int runwayDirection, String code, boolean weatherEnabled, int windDirection, int windSpeed, int visibility, int cloudBase) {
+    public Marker addAerodromeMarker(LatLng pos, String title, int runwayDirection, String code, boolean weatherEnabled, int windDirection, int windSpeed, int visibility, int cloudBase, int qnh, boolean cb) {
 
         View marker = ((LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE)).inflate(R.layout.aerodrome_symbol, null);
         TextView numTxt = (TextView) marker.findViewById(R.id.num_txt);
@@ -646,7 +664,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             if (windSpeed >= 10)
                 windDir.setColorFilter(Color.YELLOW);
             if (windSpeed >=15)
-                windDir.setColorFilter(Color.argb(255, 255, 100, 0));
+                windDir.setColorFilter(Color.argb(255, 255, 150, 0));
             if (windSpeed >= 20)
                 windDir.setColorFilter(Color.RED);
             if (visibility == -1)
@@ -663,7 +681,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             if (visibility < 5000)
                 visi.setColorFilter(Color.YELLOW);
             if (visibility < 3000)
-                visi.setColorFilter(Color.argb(255, 255, 100, 0));
+                visi.setColorFilter(Color.argb(255, 255, 150, 0));
             if (visibility < 1500)
                 visi.setColorFilter(Color.RED);
             if (visibility == -1)
@@ -679,11 +697,18 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             if (cloudBase < 15)
                 clo.setColorFilter(Color.YELLOW);
             if (cloudBase < 10)
-                clo.setColorFilter(Color.argb(255, 255, 100, 0));
-            if (cloudBase < 5)
+                clo.setColorFilter(Color.argb(255, 255, 150, 0));
+            if (cloudBase <= 5)
                 clo.setColorFilter(Color.RED);
             if (cloudBase == -1)
                 clo.setColorFilter(Color.GRAY);
+
+            TextView qnhT = (TextView) marker.findViewById(R.id.qnhad);
+            qnhT.setText(""+qnh);
+
+            ImageView cbV = marker.findViewById(R.id.cb);
+            if( cb)
+                cbV.setVisibility(View.VISIBLE);
 
         }
         else {
@@ -718,6 +743,89 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             }*/
         return customMarker;
     }
+
+
+
+    public Marker addAWSMarker(LatLng pos, String title, int windDirection, int windSpeed, int visibility, int cloudBase, int qnh, String message, boolean cb) {
+
+        View marker = ((LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE)).inflate(R.layout.aws_symbol, null);
+    //    TextView numTxt = (TextView) marker.findViewById(R.id.num_txt);
+    //    numTxt.setText(title);
+
+            ((LinearLayout) marker.findViewById(R.id.weather)).setVisibility(View.VISIBLE);
+            ImageView windDir = marker.findViewById(R.id.wind_direction);
+
+            if( windDirection == -1) {
+                windDir.setVisibility(View.GONE);
+            }
+            else
+                windDir.setRotation(windDirection);
+
+            if (windSpeed < 5)
+                windDir.setColorFilter(Color.argb(255, 0, 255, 255));
+            if (windSpeed >= 5)
+                windDir.setColorFilter(Color.GREEN);
+            if (windSpeed >= 10)
+                windDir.setColorFilter(Color.YELLOW);
+            if (windSpeed >=15)
+                windDir.setColorFilter(Color.argb(255, 255, 150, 0));
+            if (windSpeed >= 20)
+                windDir.setColorFilter(Color.RED);
+            if (visibility == -1)
+                windDir.setColorFilter(Color.GRAY);
+
+            ImageView visi = marker.findViewById(R.id.visibility);
+            if (visibility == 9999) visi.setColorFilter(Color.WHITE);
+            if (visibility < 9999)
+                visi.setColorFilter(Color.argb(255, 0, 255, 255));
+            if (visibility < 8000)
+                visi.setColorFilter(Color.GREEN);
+            if (visibility < 5000)
+                visi.setColorFilter(Color.YELLOW);
+            if (visibility < 3000)
+                visi.setColorFilter(Color.argb(255, 255, 150, 0));
+            if (visibility < 1500)
+                visi.setColorFilter(Color.RED);
+            if (visibility == -1)
+                visi.setColorFilter(Color.GRAY);
+
+
+            ImageView clo = marker.findViewById(R.id.clouds);
+            if (cloudBase >= 50 ) clo.setColorFilter(Color.WHITE);
+            if (cloudBase < 50 )
+                clo.setColorFilter(Color.argb(255, 0, 255, 255));
+            if (cloudBase < 20)
+                clo.setColorFilter(Color.GREEN);
+            if (cloudBase < 15)
+                clo.setColorFilter(Color.YELLOW);
+            if (cloudBase < 10)
+                clo.setColorFilter(Color.argb(255, 255, 150, 0));
+            if (cloudBase <= 5)
+                clo.setColorFilter(Color.RED);
+            if (cloudBase == -1)
+                clo.setColorFilter(Color.GRAY);
+
+            TextView qnhT = marker.findViewById(R.id.qnh_aws);
+            if( qnh == -1)
+                qnhT.setVisibility(View.GONE);
+            else
+                qnhT.setText(""+qnh);
+
+        ImageView cbV = marker.findViewById(R.id.cb);
+        if( cb)
+            cbV.setVisibility(View.VISIBLE);
+
+        Marker customMarker = mMap.addMarker(new MarkerOptions()
+                .position(pos)
+                .title(message)
+                .snippet(title)
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker,  title ))));
+
+
+
+        return customMarker;
+    }
+
 
 
     public Marker addWaypointMarker(LatLng pos, String title) {

@@ -113,6 +113,10 @@ public class AWSMetarClient {
                                 while (st.hasMoreTokens()) {
                                     String next = st.nextToken();
 
+                                    if (next.endsWith("CB")) {
+                                        m.setCb(true);
+                                    }
+
                                     if( next.equals("AUTO"))
                                         continue;
                                     if( next.equals("NIL"))
@@ -168,9 +172,7 @@ public class AWSMetarClient {
                                     } else if (!next.contains("/"))
                                         m.setPresentWeather(next);
 
-                                    if (next.endsWith("CB")) {
-                                        m.setCb(true);
-                                    }
+
 
                                 }
                                 LocalData.awsmetars.put(m.getStation(),m);
@@ -184,8 +186,11 @@ public class AWSMetarClient {
                             //        updateObstaclesData(features);
                         }
 
-
+                    Intent intent = new Intent();
+                    intent.setAction("outbound.ai.outbound.AWS_METAR_UPDATED");
+                    activity.sendBroadcast(intent);
                 }
+
             });
         } catch (Exception e) {
             e.printStackTrace();

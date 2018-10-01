@@ -14,7 +14,7 @@ public class Metar {
 	int dewPoint = -274;
 	int qnh = -1;
 	int meanWindSpeed = -1;
-	int meanWindDirection =0;
+	int meanWindDirection =-1;
 	int gustWindSpeed = -1;
 	int windVarMin = -1;
 	int windVarMax = -1;
