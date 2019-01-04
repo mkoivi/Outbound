@@ -16,9 +16,11 @@ import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.constraint.ConstraintLayout;
 import android.support.design.widget.BottomNavigationView;
+import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -26,18 +28,24 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Chronometer;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.Switch;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.ToggleButton;
 
 
-import com.amazonaws.mobile.client.AWSMobileClient;
-
+import com.fasterxml.jackson.databind.ser.VirtualBeanPropertyWriter;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.GoogleMapOptions;
@@ -50,6 +58,8 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import java.text.DecimalFormat;
 import java.util.HashMap;
@@ -60,6 +70,18 @@ import outbound.ai.outbound.datasources.AISDataClient;
 import outbound.ai.outbound.datasources.AWSMetarClient;
 import outbound.ai.outbound.datasources.MetarClient;
 
+import static outbound.ai.outbound.Constants.PARAM_COMMAND;
+import static outbound.ai.outbound.Constants.PARAM_GET_AERODROMES;
+import static outbound.ai.outbound.Constants.PARAM_GET_AIRPORTS;
+import static outbound.ai.outbound.Constants.PARAM_GET_AIRSPACE;
+import static outbound.ai.outbound.Constants.PARAM_GET_AWSMETARS;
+import static outbound.ai.outbound.Constants.PARAM_GET_METARS;
+import static outbound.ai.outbound.Constants.PARAM_GET_OBSTACLES;
+import static outbound.ai.outbound.Constants.PARAM_GET_RESERVATIONS;
+import static outbound.ai.outbound.Constants.PARAM_GET_SUPPLEMENTS;
+import static outbound.ai.outbound.Constants.PARAM_GET_WAYPOINTS;
+import static outbound.ai.outbound.Constants.REQUEST_ACTION;
+
 public class MenuActivity extends AppCompatActivity implements OnMapReadyCallback,  ActivityCompat.OnRequestPermissionsResultCallback ,GoogleMap.OnCameraMoveListener,GoogleMap.OnCameraIdleListener,GoogleMap.OnPolygonClickListener ,  GoogleMap.OnMarkerClickListener, GoogleMap.OnMapClickListener {
 
 
@@ -69,11 +91,12 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     private boolean mPermissionDenied = false;
 
     private GoogleMap mMap;
-    AISDataClient aisDataClient;
-    MetarClient metarClient;
-    AWSMetarClient awsMetarClient;
+
 
     static HashMap<String, Bitmap> markerCache = new HashMap<>();
+
+    boolean gettingWeatherData = false;
+    boolean weatherDataReady = false;
 
     Menu headerMenu;
 
@@ -88,8 +111,8 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     List<BroadcastReceiver> receivers = new LinkedList<>();
 
     private CameraPosition prevCameraPosition = null;
-    private TextView mTextMessage;
-    boolean myLocationEnabled = false;
+    private TextView distanceTF;
+
     boolean followingUser = false;
 
     public final float WAYPOINT_ZOOM_LIMIT = 8f;
@@ -100,8 +123,13 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private LatLng mapLoc; // current map 'target'
     private Location loc;
+    private LatLng prevLl;
+
     private Marker myPlaneMarker = null;
     private boolean flightMode = false;
+
+    Chronometer flightChronometer;
+
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -110,10 +138,10 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         public boolean onNavigationItemSelected(@NonNull MenuItem item) {
             switch (item.getItemId()) {
                 case R.id.navigation_home:
-    //                mTextMessage.setText(R.string.title_home);
+                    //                mTextMessage.setText(R.string.title_home);
                     return true;
                 case R.id.navigation_dashboard:
-  //                  mTextMessage.setText(R.string.title_dashboard);
+                    //                  mTextMessage.setText(R.string.title_dashboard);
                     return true;
                 case R.id.navigation_notifications:
 //                    mTextMessage.setText(R.string.title_notifications);
@@ -122,6 +150,12 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             return false;
         }
     };
+    private FloatingActionButton myLocButton;
+    private ToggleButton weatherToggleButton;
+
+    private ProgressBar progressBar;
+
+    List<Polyline> track = new LinkedList<>();
 
 
     @Override
@@ -132,13 +166,29 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         aerodromeView = (ConstraintLayout) findViewById(R.id.aerodrome);
         aerodromeView.setVisibility(View.GONE);
 
-
-   //     infoLayout = (ConstraintLayout) findViewById(R.id.in);
-   //     infoLayout.setVisibility(View.GONE);
+        progressBar = (ProgressBar) findViewById(R.id.progressBar);
+        //     infoLayout = (ConstraintLayout) findViewById(R.id.in);
+        //     infoLayout.setVisibility(View.GONE);
 
         flightInfo = (LinearLayout) findViewById(R.id.flight_info);
         flightInfo.setVisibility(View.GONE);
 
+        Switch onOffSwitch = (Switch)  findViewById(R.id.metarSwitch);
+        onOffSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                showMetar(isChecked);
+            }
+
+        });
+
+        distanceTF = (TextView) findViewById(R.id.distance);
+
+        myLocButton = (FloatingActionButton) findViewById(R.id.myLocation);
+        myLocButton.setVisibility(View.INVISIBLE);
+
+      //  weatherToggleButton = (ToggleButton) findViewById(R.id.toggleWeather);
 
         BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
         navigation.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
@@ -148,7 +198,10 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
+        registerReceiver(mResponseActionReceiver,
+                new IntentFilter(Constants.RESPONSE_ACTION));
 
+        startMainServiceIfNotStarted();
 
     }
 
@@ -174,9 +227,9 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap.setOnCameraMoveListener(this);
         mMap.setOnCameraIdleListener(this);
         mMap.setOnMapClickListener(this);
-   //     mMap.setOnMyLocationButtonClickListener(this);
-   //     mMap.setOnMyLocationClickListener(this);
-   //     enableMyLocation();
+        //     mMap.setOnMyLocationButtonClickListener(this);
+        //     mMap.setOnMyLocationClickListener(this);
+        //     enableMyLocation();
 
         GoogleMapOptions options = new GoogleMapOptions();
         options.compassEnabled(true)
@@ -185,16 +238,13 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
         mMap.setOnMarkerClickListener(this);
-        aisDataClient = new AISDataClient(this);
-        metarClient = new MetarClient(this);
-        awsMetarClient = new AWSMetarClient(this);
 
         setupData();
 
-
     }
 
-    private void setupData() {
+
+ /*   private void getWeatherData() {
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             @Override
             public void run() {
@@ -217,118 +267,121 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                     @Override
                     public void onReceive(Context context, Intent intent) {
                         System.out.println("Received AWS metar data");
-//                            updateWeather()
                         updateWeather();
+                        updateAirports();
+                        updateAerodromes();
+                        weatherDataReady = true;
+                        gettingWeatherData = false;
+                        weatherToggleButton.setImageResource(R.drawable.cloud_lighted);
+
                     }
                 };
                 registerReceiver(receiver9, filter9);
-
-
-                IntentFilter filter = new IntentFilter("outbound.ai.outbound.AIRSPACE_UPDATED");
-                BroadcastReceiver receiver = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received airpace data");
-                        updateAirspace();
-                        //                Toast.makeText(MenuActivity.this, "Loading supplements",
-                        //                        Toast.LENGTH_SHORT).show();
-                        aisDataClient.getSupplements();
-                        metarClient.getWeather();
-                    }
-                };
-                registerReceiver(receiver, filter);
-
-                IntentFilter filter2 = new IntentFilter("outbound.ai.outbound.SUPPLEMENTS_UPDATED");
-                BroadcastReceiver receiver2 = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received supplements data");
-                        updateSupplements();
-                        aisDataClient.getAerodromes();
-                        //               Toast.makeText(MenuActivity.this, "Loading aerodromes",
-                        //                       Toast.LENGTH_SHORT).show();
-                    }
-                };
-                registerReceiver(receiver2, filter2);
-
-                IntentFilter filter5 = new IntentFilter("outbound.ai.outbound.AERODROMES_UPDATED");
-                BroadcastReceiver receiver5 = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received aerodromes data");
-                        updateAerodromes();
-                        //                  Toast.makeText(MenuActivity.this, "Loading airports",
-                        //                          Toast.LENGTH_SHORT).show();
-                        aisDataClient.getAirports();
-                    }
-                };
-                registerReceiver(receiver5, filter5);
-
-                IntentFilter filter3 = new IntentFilter("outbound.ai.outbound.AIRPORTS_UPDATED");
-                BroadcastReceiver receiver3 = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received airports data");
-                        updateAirports();
-                        //                 Toast.makeText(MenuActivity.this, "Loading reservations",
-                        //                         Toast.LENGTH_SHORT).show();
-                        aisDataClient.getReservations();
-
-                    }
-                };
-                registerReceiver(receiver3, filter3);
-
-                IntentFilter filter4 = new IntentFilter("outbound.ai.outbound.RESERVATIONS_UPDATED");
-                BroadcastReceiver receiver4 = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received reservations data");
-                        updateReservations();
-                        //                     Toast.makeText(MenuActivity.this, "Loading waypoints",
-                        //                             Toast.LENGTH_SHORT).show();
-                        aisDataClient.getWaypoints();
-                    }
-                };
-                registerReceiver(receiver4, filter4);
-
-                IntentFilter filter6 = new IntentFilter("outbound.ai.outbound.WAYPOINTS_UPDATED");
-                BroadcastReceiver receiver6 = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received waypoints data");
-                        updateWaypoints();
-                        //                  Toast.makeText(MenuActivity.this, "Loading obstacles",
-                        //                          Toast.LENGTH_SHORT).show();
-
-                        aisDataClient.getObstacles();
-
-                    }
-                };
-                registerReceiver(receiver6, filter6);
-
-                IntentFilter filter7 = new IntentFilter("outbound.ai.outbound.OBSTACLES_UPDATED");
-                BroadcastReceiver receiver7 = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        System.out.println("Received obstacles data");
-                        updateObstacles();
-
-                    }
-                };
-                registerReceiver(receiver7, filter7);
-
-
-                //         Toast.makeText(MenuActivity.this, "Loading airspace segments",
-                //               Toast.LENGTH_SHORT).show();
-                aisDataClient.getAirspaces();
-
-
+                metarClient.getWeather();
             }
-        });
+        }
+        );
+    }*/
+
+    private void sendServiceRequest(String command) {
+        Log.d(TAG, "Service request: " + command);
+        Intent intent = new Intent();
+        intent.setAction(REQUEST_ACTION);
+        intent.putExtra(PARAM_COMMAND, command);
+        sendBroadcast(intent);
+    }
+
+    private void setupData() {
+
+        final Handler handler0 = new Handler();
+        handler0.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                sendServiceRequest(PARAM_GET_AIRSPACE);
+            }
+        }, 500);
+
+        final Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                sendServiceRequest(PARAM_GET_SUPPLEMENTS);
+            }
+        }, 1200);
+        final Handler handler2 = new Handler();
+        handler2.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                sendServiceRequest(PARAM_GET_AERODROMES);
+            }
+        }, 2000);
+        final Handler handler3 = new Handler();
+        handler3.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                sendServiceRequest(PARAM_GET_AIRPORTS);
+            }
+        }, 3000);
+        final Handler handler4 = new Handler();
+        handler4.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                sendServiceRequest(PARAM_GET_RESERVATIONS);
+            }
+        }, 4000);
+        final Handler handler5 = new Handler();
+        handler5.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                sendServiceRequest(PARAM_GET_WAYPOINTS);
+            }
+        }, 5000);
+        final Handler handler6 = new Handler();
+        handler6.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                sendServiceRequest(PARAM_GET_OBSTACLES);
+                progressBar.setVisibility(View.GONE);
+            }
+        }, 6000);
 
 
     }
 
+    private final BroadcastReceiver mResponseActionReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+
+                    String cmd = intent.getExtras().getString(Constants.PARAM_COMMAND);
+                    Log.d(TAG, "Response: " + cmd);
+                    if (cmd != null) {
+
+                        if (cmd.equals(Constants.PARAM_GET_AIRSPACE)) {
+                            updateAirspace();
+                        } else if (cmd.equals(Constants.PARAM_GET_SUPPLEMENTS)) {
+                            updateSupplements();
+                        } else if (cmd.equals(Constants.PARAM_GET_AERODROMES)) {
+                            updateAerodromes();
+                        } else if (cmd.equals(Constants.PARAM_GET_AIRPORTS)) {
+                            updateAirports();
+                        } else if (cmd.equals(Constants.PARAM_GET_RESERVATIONS)) {
+                            updateReservations();
+                        } else if (cmd.equals(Constants.PARAM_GET_WAYPOINTS)) {
+                            updateWaypoints();
+                        } else if (cmd.equals(Constants.PARAM_GET_OBSTACLES)) {
+                            updateObstacles();
+                        }
+                         else if (cmd.equals(Constants.PARAM_GET_METARS)) {
+                              // No action, wait for AWS metars
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_AWSMETARS)) {
+                            updateWeather();
+                        }
+
+                    }
+                }
+            };
 
 
 
@@ -510,10 +563,10 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                         if( metar.getGustWindSpeed() > 0 ) {
                             windSpeed = metar.getGustWindSpeed();
                         }
-                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), true, metar.getMeanWindDirection(), windSpeed, metar.getVisibility(), metar.getCloudBase(), metar.getQnh(), metar.isCb()));
+                        airportMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), true, metar.getMeanWindDirection(), windSpeed, metar.getVisibility(), metar.getCloudBase(), metar.getQnh(), metar.isCb()));
                     }
                     else {
-                        aerodromeMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), false, 0, 0, 0, 0,0, false));
+                        airportMarkers.add(addAerodromeMarker(a.getCenter(), a.getCode(), rotation, a.getCode(), false, 0, 0, 0, 0,0, false));
 
                    }
                 } catch (Exception e) {
@@ -570,6 +623,19 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    private void clearWeatherData() {
+        for (Marker m : awsMarkers) {
+            m.remove();
+        }
+        awsMarkers.clear();
+        LocalData.awsmetars.clear();
+        LocalData.metars.clear();
+        updateAerodromes();
+        updateAirports();
+
+
+    }
+
 
     private void updateWeather() {
 
@@ -586,6 +652,11 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
             awsMarkers.add(addAWSMarker(metar.getLocation(), metar.getStation(), metar.getMeanWindDirection(), windSpeed, metar.getVisibility(), metar.getCloudBase(), metar.getQnh(), metar.getMessage(), metar.isCb()));
         }
+        updateAirports();
+        updateAerodromes();
+        weatherDataReady = true;
+        gettingWeatherData = false;
+   //     weatherToggleButton.setImageResource(R.drawable.cloud_lighted);
     }
 
     @Override
@@ -619,7 +690,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .position(pos)
                 .title(tooltipTitle)
                 .snippet("Details")
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "as_" + cls + upper + lower))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "as_" + cls + upper + lower, true))));
 
 
         final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
@@ -720,7 +791,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .position(pos)
                 .title(code)
                 .snippet("Details")
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "ad_" + title + runwayDirection))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "ad_" + title + runwayDirection, false))));
 
 
         final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
@@ -819,7 +890,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .position(pos)
                 .title(message)
                 .snippet(title)
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker,  title ))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker,  title, false ))));
 
 
 
@@ -836,7 +907,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .position(pos)
                 .title("Title")
                 .snippet("Description")
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "wp_" + title))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "wp_" + title, true))));
 
 
         final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
@@ -870,7 +941,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .position(pos)
                 .title(title)
                 .snippet(type)
-                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "obs_" + title + type + elevation))));
+                .icon(BitmapDescriptorFactory.fromBitmap(createDrawableFromView(this, marker, "obs_" + title + type + elevation, true) )));
 
 
         final View mapView = getSupportFragmentManager().findFragmentById(R.id.map).getView();
@@ -898,9 +969,9 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
     // Convert a view to bitmap
-    public static Bitmap createDrawableFromView(Context context, View view, String id) {
+    public static Bitmap createDrawableFromView(Context context, View view, String id, boolean cacheable) {
 
-        if (markerCache.containsKey(id)) {
+        if (cacheable && markerCache.containsKey(id)) {
             return markerCache.get(id);
         }
 
@@ -957,6 +1028,7 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onCameraIdle() {
         LatLng ll = mMap.getCameraPosition().target;
 
+
         if (mMap.getCameraPosition().zoom > OBSTACLE_ZOOM_LIMIT) {
             for (Marker m : obstacleMarkers) {
                 if (Math.abs(m.getPosition().latitude - ll.latitude) < 0.3 && Math.abs(m.getPosition().longitude - ll.longitude) < 0.35) {
@@ -975,6 +1047,55 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 m.setVisible(false);
             }
         }
+
+        if (isMapCenterNearMyLocation(ll) || (ll.latitude < 0.01 && ll.latitude > -0.01)) {
+            Log.d(TAG, "Map following user");
+            this.setLockMap(true);
+        } else {
+            Log.d(TAG, "Map not following user");
+            this.setLockMap(false);
+        }
+
+    }
+
+    public void clickedFocusToMyLocation( View view) {
+        Log.d(TAG, "clickedFocusToMyLocation");
+       focusToMyLocation();
+    }
+
+
+    public void focusToMyLocation() {
+        if( mMap == null ) {
+            Log.d(TAG, "focusToMyLocation: MapFragment not inited, return_here without map update");
+            return;
+        }
+        if( loc == null ) {
+            Log.d(TAG, "UpdateBearing: location null, return" );
+            return;
+        }
+        CameraPosition currPos = mMap.getCameraPosition();
+
+        this.setLockMap(false);
+        mMap.animateCamera(CameraUpdateFactory.newCameraPosition(new CameraPosition.Builder()
+                .target(new LatLng(loc.getLatitude(), loc.getLongitude()))
+                .zoom(currPos.zoom).tilt(currPos.tilt)
+                .bearing(currPos.bearing)
+                .build()));
+    }
+
+
+    public boolean isMapCenterNearMyLocation( LatLng mapL) {
+        if( loc == null ) return false;
+        float[] res = new float[2];
+        Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), mapL.latitude, mapL.longitude, res);
+
+        CameraPosition currPos = mMap.getCameraPosition();
+
+        Log.d(TAG, "isMapCenterNearMyLocation: dist " + res[0] + ", zoom: " + currPos.zoom);
+        if( currPos.zoom > 14 && res[0] > 100 ) return false;
+        if( res[0] > 300) return false;
+        return true;
+
     }
 
 
@@ -1206,18 +1327,79 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
                 ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "" + (int)(location.getSpeed() *1.943) );
             else
                 ((TextView) flightInfo.findViewById(R.id.groundspeed)).setText( "N/A");
+
+
+            if (followingUser ) {
+                CameraPosition currPos = mMap.getCameraPosition();
+                mMap.animateCamera(CameraUpdateFactory.newCameraPosition(new CameraPosition.Builder()
+                        .target(new LatLng(location.getLatitude(), location.getLongitude()))
+                        .zoom(currPos.zoom).tilt(currPos.tilt)
+                        .bearing(currPos.bearing)
+                        .build()));
+
+            }
+
+
+            distanceTF.setText( "" + (int)(LocalData.distance * 0.000539956803) );
+
+            if( prevLl != null) {
+                PolylineOptions trackOpt = new PolylineOptions().width(4).color(Color.argb(130, 61, 142, 242)).zIndex(99);
+                trackOpt.add(prevLl, ll);
+                track.add( mMap .addPolyline(trackOpt));
+            }
+
+            prevLl = ll;
+
+
+
+
         }
 
 
     }
 
+    public void zoomTo(float zoom) {
+        if( mMap == null ) {
+            Log.d(TAG, "focusToMyLocation: MapFragment not inited, return_here without map update");
+            return;
+        }
+
+        CameraPosition currPos = mMap.getCameraPosition();
+
+        this.setLockMap(false);
+        mMap.moveCamera(CameraUpdateFactory.newCameraPosition(new CameraPosition.Builder()
+                .target(currPos.target)
+                .zoom(zoom).tilt(currPos.tilt)
+                .bearing(currPos.bearing)
+                .build()));
+    }
+
+    public void clickedZoomIn( View view ) {
+        Log.d(TAG, "clickedZoomIn");
+        if( mMap == null ) {
+            Log.d(TAG, "focusToMyLocation: MapFragment not inited, return_here without map update");
+            return;
+        }
+
+        zoomTo( mMap.getCameraPosition().zoom + 1);
+    }
+
+    public void clickedZoomOut( View view ) {
+        Log.d(TAG, "clickedZoomOut");
+        if( mMap == null ) {
+            Log.d(TAG, "focusToMyLocation: MapFragment not inited, return_here without map update");
+            return;
+        }
+
+        zoomTo( mMap.getCameraPosition().zoom - 1);
+    }
 
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         this.headerMenu = menu;
-        getMenuInflater().inflate(R.menu.main_menu, menu);
+        getMenuInflater().inflate(R.menu.menu_plan, menu);
         return true;
     }
 
@@ -1235,15 +1417,35 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             flightMode = true;
         }
 
+        sendServiceRequest(Constants.PARAM_START_TRACKING);
+
+        myLocButton.setVisibility(View.VISIBLE);
 
         registerReceiver(mUpdateLocationReceiver,
                 new IntentFilter(Constants.LOCATION_UPDATE_ACTION));
 
-
+        flightChronometer = (Chronometer) findViewById(R.id.flighttime); // initiate a chronometer
+        flightChronometer.setBase(SystemClock.elapsedRealtime());
+        flightChronometer.start(); // start a chronometer
+        LocalData.distance = 0;
         flightInfo.setVisibility(View.VISIBLE);
+
+        headerMenu.clear();
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_fly, headerMenu);
 
     }
 
+    private void stopFlightMode() {
+        headerMenu.clear();
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_landing, headerMenu);
+        myLocButton.setVisibility(View.VISIBLE);
+
+        flightChronometer.stop();
+        sendServiceRequest(Constants.PARAM_STOP_TRACKING);
+
+    }
 
 
     public void startMainServiceIfNotStarted() {
@@ -1277,7 +1479,13 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         switch (item.getItemId()) {
             case R.id.flight_mode:
                 startFlightMode();
-
+                break;
+            case R.id.landing_mode:
+                stopFlightMode();
+                break;
+            case R.id.flight_clear:
+                clearFlight();
+                break;
       /*      case R.id.action_map:
                 if( mainView != MainView.MAP) {
                     showMainView( MainView.MAP);
@@ -1297,6 +1505,21 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
             //         clickedStartHelper(null);
         }
         return true;
+    }
+
+    private void clearFlight() {
+        LocalData.distance = 0;
+
+        flightInfo.setVisibility(View.GONE);
+        for( Polyline trackItem:track) {
+            trackItem.remove();
+        }
+        track.clear();
+        myPlaneMarker.remove();
+        myPlaneMarker = null;
+        headerMenu.clear();
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_plan, headerMenu);
     }
 
     private final BroadcastReceiver mUpdateLocationReceiver =
@@ -1334,5 +1557,27 @@ public class MenuActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    public void setLockMap( boolean enabled) {
+        if( !enabled) {
+            followingUser = false;
+        }
+        else {
+            followingUser = true;
+        }
 
+    }
+
+
+    public void showMetar( boolean enabled) {
+        Log.d(TAG, "clickedToggleWeather");
+
+        if( enabled) {
+            sendServiceRequest(PARAM_GET_METARS);
+            sendServiceRequest(PARAM_GET_AWSMETARS);
+
+        }
+        else  {
+            clearWeatherData();
+        }
+    }
 }

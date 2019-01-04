@@ -6,6 +6,8 @@ import android.content.SharedPreferences;
 import android.location.Location;
 import android.util.Log;
 
+import com.google.android.gms.maps.model.LatLng;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -43,6 +45,9 @@ public class LocalData {
         return sInstance;
     }
 
+
+    public List<LatLng> track = new LinkedList<>();
+
     public static List<Airspace> airspaces= new LinkedList<>();
     public static long airspacesUpdated = 0;
 
@@ -64,6 +69,7 @@ public class LocalData {
     public static List<Obstacle> obstacles = new LinkedList<>();
     public static long obstaclesUpdated = 0;
 
+    public static double distance = 0;
 
     public static HashMap<String,Metar> metars = new HashMap<>();
     public static HashMap<String, Metar> awsmetars = new HashMap<>();
@@ -185,6 +191,20 @@ public class LocalData {
             return -1;
         }
         return( new Date().getTime()- file.lastModified());
+    }
+
+
+
+    public List<LatLng> getTrack() {
+        return track;
+    }
+
+    public void setTrack(List<LatLng> track) {
+        this.track = track;
+    }
+
+    public void addTrackLocation( LatLng ll) {
+        track.add(ll);
     }
 
 

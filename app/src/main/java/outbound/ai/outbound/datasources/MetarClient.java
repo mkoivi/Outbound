@@ -1,6 +1,7 @@
 package outbound.ai.outbound.datasources;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 import android.widget.LinearLayout;
@@ -20,6 +21,7 @@ import java.util.List;
 
 import cz.msebera.android.httpclient.Header;
 import cz.msebera.android.httpclient.HttpEntity;
+import outbound.ai.outbound.Constants;
 import outbound.ai.outbound.LocalData;
 import outbound.ai.outbound.Metar;
 import outbound.ai.outbound.metar.MetarParserHandler;
@@ -29,9 +31,9 @@ public class MetarClient {
     private static AsyncHttpClient client = new AsyncHttpClient();
 
     private final static String TAG = "OB:DownloadAreasHTTPC";
-    Activity activity;
+    Context activity;
 
-    public MetarClient(Activity activity) {
+    public MetarClient(Context activity) {
         this.activity = activity;
     }
 
@@ -59,9 +61,12 @@ public static void get(SaxAsyncHttpResponseHandler responseHandler) {
                         LocalData.metars.put(m.getStation(), m);
 
                     }
+
                     Intent intent = new Intent();
-                    intent.setAction("outbound.ai.outbound.METAR_UPDATED");
+                    intent.setAction(Constants.RESPONSE_ACTION);
+                    intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_METARS);
                     activity.sendBroadcast(intent);
+
                 }
 
                 @Override

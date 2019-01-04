@@ -1,6 +1,8 @@
 package outbound.ai.outbound;
 
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.location.Criteria;
@@ -16,6 +18,12 @@ import android.widget.Toast;
 import java.util.HashMap;
 import java.util.Map;
 
+import outbound.ai.outbound.datasources.AISDataClient;
+import outbound.ai.outbound.datasources.AWSMetarClient;
+import outbound.ai.outbound.datasources.MetarClient;
+
+import static outbound.ai.outbound.Constants.RESPONSE_ACTION;
+
 public class MainService extends Service implements LocationListener {
 
     private final static String TAG = "OB:MainService";
@@ -24,6 +32,11 @@ public class MainService extends Service implements LocationListener {
     private LocationManager locationManager;  // tracking handler
     private static MainService instance;
 
+    private Location prevLoc = null;
+
+    AISDataClient aisDataClient;
+    MetarClient metarClient;
+    AWSMetarClient awsMetarClient;
 
     public MainService() {
     }
@@ -76,6 +89,13 @@ public class MainService extends Service implements LocationListener {
         locationParameters.put(Constants.PARAM_TIME, "" + location.getTime());
 
         locationParameters.put("extras", "" + location.getExtras());
+        LocalData.gpsLocation = location;
+
+        if( prevLoc != null) {
+            LocalData.distance += HelperLibrary.distance(location.getLatitude(), prevLoc.getLatitude(),location.getLongitude(),prevLoc.getLongitude(), location.getAltitude(), prevLoc.getAltitude());
+            Log.d(TAG, "distance " + LocalData.distance);
+        }
+        prevLoc = location;
 
 
         Intent intent = new Intent(Constants.LOCATION_UPDATE_ACTION);
@@ -91,9 +111,15 @@ public class MainService extends Service implements LocationListener {
     public void onCreate() {
         Log.i(TAG, "onCreate");
 
+        registerReceiver(mRequestActionReceiver,
+                new IntentFilter(Constants.REQUEST_ACTION));
 
         instance = this;
-        initSession();
+    //    initSession();
+
+        aisDataClient = new AISDataClient(this);
+        metarClient = new MetarClient(this);
+        awsMetarClient = new AWSMetarClient(this);
 
 
     }
@@ -111,7 +137,7 @@ public class MainService extends Service implements LocationListener {
         }
 
         try {
-            getLocationManager().requestLocationUpdates(gpsProvider, 1000, 1, this);
+            getLocationManager().requestLocationUpdates(gpsProvider, 2000, 10, this);
             Log.i(TAG, "Location tracking active");
         } catch (SecurityException e) {
             Toast.makeText(this, "GPS Location not allowed in security settings, please enable!"
@@ -171,10 +197,70 @@ public class MainService extends Service implements LocationListener {
             e.printStackTrace();
         }
 
-
+        try {
+            unregisterReceiver( mRequestActionReceiver);
+        }
+        catch( Exception e) {
+            e.printStackTrace();
+        }
 
         super.onDestroy();
 
+    }
+
+
+    private final BroadcastReceiver mRequestActionReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+
+                    String cmd = intent.getExtras().getString(Constants.PARAM_COMMAND);
+                    Log.i(TAG, "Request action: " + cmd);
+                    if (cmd != null) {
+
+                        if (cmd.equals(Constants.PARAM_GET_AIRSPACE)) {
+                            aisDataClient.getAirspaces();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_AIRPORTS)) {
+                            aisDataClient.getAirports();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_AERODROMES)) {
+                            aisDataClient.getAerodromes();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_SUPPLEMENTS)) {
+                            aisDataClient.getSupplements();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_OBSTACLES)) {
+                            aisDataClient.getObstacles();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_WAYPOINTS)) {
+                            aisDataClient.getWaypoints();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_RESERVATIONS)) {
+                            aisDataClient.getReservations();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_METARS)) {
+                            metarClient.getWeather();
+                        }
+                        else if (cmd.equals(Constants.PARAM_GET_AWSMETARS)) {
+                            awsMetarClient.getWeather();
+                        }
+                        else if (cmd.equals(Constants.PARAM_START_TRACKING)) {
+                            initSession();
+                        }
+                        else if (cmd.equals(Constants.PARAM_STOP_TRACKING)) {
+                            getLocationManager().removeUpdates(MainService.this);
+                        }
+
+                    }
+                }
+            };
+
+    private void sendServiceRequest(String command) {
+        Log.d(TAG, "Service request: " + command);
+        Intent intent = new Intent();
+        intent.setAction(RESPONSE_ACTION);
+        sendBroadcast(intent);
     }
 
 }

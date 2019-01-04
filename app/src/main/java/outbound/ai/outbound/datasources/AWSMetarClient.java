@@ -1,6 +1,7 @@
 package outbound.ai.outbound.datasources;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
@@ -26,6 +27,7 @@ import outbound.ai.outbound.Aerodrome;
 import outbound.ai.outbound.Airport;
 import outbound.ai.outbound.Airspace;
 import outbound.ai.outbound.CloudLayer;
+import outbound.ai.outbound.Constants;
 import outbound.ai.outbound.LocalData;
 import outbound.ai.outbound.Metar;
 import outbound.ai.outbound.Obstacle;
@@ -38,9 +40,9 @@ public class AWSMetarClient {
 
 
     private final static String TAG = "OB:DownloadAreasHTTPC";
-    Activity activity;
+    Context activity;
 
-    public AWSMetarClient(Activity activity) {
+    public AWSMetarClient(Context activity) {
         this.activity = activity;
         client = new AsyncHttpClient();
         try {
@@ -146,15 +148,26 @@ public class AWSMetarClient {
                                     }
 
                                     if (next.contains("FEW") || next.contains("SCT") || next.contains("BKN") || next.contains("OVC")) {
-                                        CloudLayer mc = new CloudLayer();
-                                        mc.layerType = next.substring(0, 3);
-                                        mc.baseHeight = Integer.parseInt(next.substring(3));
-                                        m.getClouds().add(mc);
+                                        try {
+                                            CloudLayer mc = new CloudLayer();
+                                            mc.layerType = next.substring(0, 3);
+                                            mc.baseHeight = Integer.parseInt(next.substring(3));
+                                            m.getClouds().add(mc);
+                                        }
+                                        catch (NumberFormatException e) {
+                                            e.printStackTrace();
+                                        }
+
                                     } else if (next.startsWith("VV")) {
-                                        CloudLayer mc = new CloudLayer();
-                                        mc.layerType = "VV";
-                                        mc.baseHeight = Integer.parseInt(next.substring(2));
-                                        m.getClouds().add(mc);
+                                        try {
+                                            CloudLayer mc = new CloudLayer();
+                                            mc.layerType = "VV";
+                                            mc.baseHeight = Integer.parseInt(next.substring(2));
+                                            m.getClouds().add(mc);
+                                        }
+                                        catch (NumberFormatException e) {
+                                            e.printStackTrace();
+                                        }
                                     } else if (next.startsWith("Q") && !next.contains("/")) {
                                         String qnh = next;
                                         qnh = qnh.replace("Q", "");
@@ -186,9 +199,11 @@ public class AWSMetarClient {
                             //        updateObstaclesData(features);
                         }
 
-                    Intent intent = new Intent();
-                    intent.setAction("outbound.ai.outbound.AWS_METAR_UPDATED");
+                      Intent intent = new Intent();
+                    intent.setAction(Constants.RESPONSE_ACTION);
+                    intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_AWSMETARS);
                     activity.sendBroadcast(intent);
+
                 }
 
             });

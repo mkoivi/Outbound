@@ -17,26 +17,120 @@
         android:layout_height="match_parent"
         tools:context=".MenuActivity" />
 
+    <LinearLayout
+        android:id="@+id/layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+
+        <include
+            layout="@layout/flight_info"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+    </LinearLayout>
+
     <include
         layout="@layout/aerodrome"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintBottom_toBottomOf="parent" />
 
+
     <include
         layout="@layout/info_layout"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:visibility="gone"/>
+        android:layout_weight="1"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
-
-    <include
-        layout="@layout/flight_info"
-        android:layout_width="0dp"
+    <Switch
+        android:id="@+id/metarSwitch"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+
+        android:layout_marginTop="30dp"
+        android:text="METAR"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/myLocation"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginTop="70dp"
+        android:onClick="clickedFocusToMyLocation"
+        android:src="@drawable/target_tight"
+        app:backgroundTint="@android:color/holo_purple"
+        app:elevation="6dp"
+
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+<!--    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/toggleWeather"
+        style="@style/Widget.Design.FloatingActionButton"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_marginRight="4dp"
+        android:layout_marginTop="4dp"
+        android:foregroundTint="@android:color/white"
+        android:onClick="clickedToggleWeather"
+        android:src="@drawable/cloud"
+        app:backgroundTint="@android:color/holo_blue_dark"
+        app:elevation="6dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+-->
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/zoomIn"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginTop="5dp"
+        android:onClick="clickedZoomIn"
+        android:src="@drawable/zoomin"
+        app:backgroundTint="@android:color/holo_blue_dark"
+        app:elevation="6dp"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/myLocation" />
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/zoomOut"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginTop="5dp"
+        android:onClick="clickedZoomOut"
+        android:src="@drawable/zoomout"
+        app:backgroundTint="@android:color/holo_blue_dark"
+        app:elevation="6dp"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/zoomIn" />
+
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:layout_editor_absoluteX="0dp"
+        tools:layout_editor_absoluteY="0dp">
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+
+            android:layout_alignParentLeft="false"
+            android:layout_alignParentStart="false"
+            android:layout_centerInParent="true" />
+
+    </RelativeLayout>
 
 
 </android.support.constraint.ConstraintLayout>

@@ -1,6 +1,7 @@
 package outbound.ai.outbound.datasources;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
@@ -18,6 +19,7 @@ import cz.msebera.android.httpclient.Header;
 import outbound.ai.outbound.Aerodrome;
 import outbound.ai.outbound.Airport;
 import outbound.ai.outbound.Airspace;
+import outbound.ai.outbound.Constants;
 import outbound.ai.outbound.LocalData;
 import outbound.ai.outbound.Obstacle;
 import outbound.ai.outbound.Reservation;
@@ -27,9 +29,9 @@ import outbound.ai.outbound.Waypoint;
 
 public class AISDataClient {
     private final static String TAG = "OB:DownloadAreasHTTPC";
-    Activity activity;
+    Context activity;
 
-    public AISDataClient(Activity activity) {
+    public AISDataClient(Context activity) {
         this.activity = activity;
     }
 
@@ -88,7 +90,8 @@ public class AISDataClient {
         }
         LocalData.airspaces = airspaceList;
         Intent intent = new Intent();
-        intent.setAction("outbound.ai.outbound.AIRSPACE_UPDATED");
+        intent.setAction(Constants.RESPONSE_ACTION);
+        intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_AIRSPACE);
         activity.sendBroadcast(intent);
     }
 
@@ -200,9 +203,10 @@ public class AISDataClient {
 
                     LocalData.supplements = airspaceList;
 
-                Intent intent = new Intent();
-                intent.setAction("outbound.ai.outbound.SUPPLEMENTS_UPDATED");
-                activity.sendBroadcast(intent);
+        Intent intent = new Intent();
+        intent.setAction(Constants.RESPONSE_ACTION);
+        intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_SUPPLEMENTS);
+        activity.sendBroadcast(intent);
 
             }
 
@@ -279,9 +283,10 @@ public class AISDataClient {
                     LocalData.reservations = airspaceList;
 
 
-                Intent intent = new Intent();
-                intent.setAction("outbound.ai.outbound.RESERVATIONS_UPDATED");
-                activity.sendBroadcast(intent);
+        Intent intent = new Intent();
+        intent.setAction(Constants.RESPONSE_ACTION);
+        intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_RESERVATIONS);
+        activity.sendBroadcast(intent);
 
             }
 
@@ -372,9 +377,10 @@ public class AISDataClient {
                             e.printStackTrace();
                         }
                     }
-                  Intent intent = new Intent();
-                intent.setAction("outbound.ai.outbound.AERODROMES_UPDATED");
-                activity.sendBroadcast(intent);
+        Intent intent = new Intent();
+        intent.setAction(Constants.RESPONSE_ACTION);
+        intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_AERODROMES);
+        activity.sendBroadcast(intent);
 
     }
 
@@ -473,9 +479,10 @@ public class AISDataClient {
 
 
 
-                Intent intent = new Intent();
-                intent.setAction("outbound.ai.outbound.AIRPORTS_UPDATED");
-                activity.sendBroadcast(intent);
+        Intent intent = new Intent();
+        intent.setAction(Constants.RESPONSE_ACTION);
+        intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_AIRPORTS);
+        activity.sendBroadcast(intent);
 
             }
 
@@ -554,9 +561,10 @@ public class AISDataClient {
                     LocalData.waypoints = airspaceList;
 
 
-                Intent intent = new Intent();
-                intent.setAction("outbound.ai.outbound.WAYPOINTS_UPDATED");
-                activity.sendBroadcast(intent);
+        Intent intent = new Intent();
+        intent.setAction(Constants.RESPONSE_ACTION);
+        intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_WAYPOINTS);
+        activity.sendBroadcast(intent);
 
 
     }
@@ -635,9 +643,10 @@ public class AISDataClient {
 
                     LocalData.obstacles = airspaceList;
 
-                Intent intent = new Intent();
-                intent.setAction("outbound.ai.outbound.OBSTACLES_UPDATED");
-                activity.sendBroadcast(intent);
+        Intent intent = new Intent();
+        intent.setAction(Constants.RESPONSE_ACTION);
+        intent.putExtra(Constants.PARAM_COMMAND, Constants.PARAM_GET_OBSTACLES);
+        activity.sendBroadcast(intent);
 
             }
 
